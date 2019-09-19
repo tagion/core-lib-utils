@@ -72,6 +72,7 @@ struct decimal {
 // Phobos does not have 0-filled hex conversion functions?
 
 
+version(none)
 @trusted
 string toHex(in ubyte[] nums) pure nothrow {
     immutable static lowerHexDigits = "0123456789abcdef";
@@ -87,6 +88,7 @@ string toHex(in ubyte[] nums) pure nothrow {
 }
 
 
+version(none)
 @safe
 ubyte[] fromHex(in string hex) pure nothrow {
     static ubyte toNum(in char c) pure nothrow
@@ -122,7 +124,7 @@ bool isSubType(T)() {
         (is(T:const(decimal)[]));
 }
 */
-
+/+
 template getSubtype(T)() {
     alias BaseT=TypedefType!T;
     alias UnqualT=Unqual!BaseT;
@@ -160,6 +162,7 @@ template getSubtype(T)() {
         static assert(0, format("Unsupported type '%s'", T.stringof));
     }
 }
++/
 
 template getType(T) {
     alias BaseT=TypedefType!T;
@@ -228,6 +231,7 @@ unittest
 }
 
 
+version(none)
 unittest { // toArray
     auto strings=["Hej", "med", "Dig"];
     auto hbson=new HBSON;
@@ -243,8 +247,9 @@ unittest { // toArray
 //
 // HBSON Array
 //
-alias HBSAN=HBSON!(true);
+//alias HBSAN=HBSON!(true);
 
+version(none)
 @safe class HBSON(bool hbson_array=false, bool one_time_write=false) {
 
     static string TypeString(T)() {
@@ -313,14 +318,14 @@ alias HBSAN=HBSON!(true);
         HBSON[] hbson_array;
         Document[] document_array;
     };
-
+/+
     auto set(T)() {
         static if (is(T ==
     }
     this() {
         _type=Type.DOCUMENT;
     }
-
++/
     //@property
     // @trusted
     // size_t id() const pure nothrow {
@@ -487,6 +492,7 @@ alias HBSAN=HBSON!(true);
 
 
     }
+
     package Value value;
     bool isDocument() {
         return ( (type == Type.DOCUMENT) || (type == Type.ARRAY) );
@@ -510,7 +516,10 @@ alias HBSAN=HBSON!(true);
             elm.value.boolean=x;
         }
         else static if ( is(UnqualT == double) ) {
+            int x;
         }
+    }
+
     /*
     @trusted
     protected void append(T)(Type type, string key, T x, BinarySubType binary_subtype=BinarySubType.GENERIC) {
@@ -759,7 +768,7 @@ alias HBSAN=HBSON!(true);
             static assert(0, format("opIndexAssign does not support type %s", T.stringof));
         }
     }
-
+/+
     unittest { // opIndexAssign type test
         auto hbson=new HBSON;
         {
@@ -819,11 +828,12 @@ alias HBSAN=HBSON!(true);
         }
 
     }
-
++/
     // void setNull(string key) {
     //     append(Type.NULL, key, null);
     // }
 
+    version(none)
     unittest { // bool bug-fix test
         auto hbson=new HBSON;
         const x=true;
@@ -836,6 +846,7 @@ alias HBSAN=HBSON!(true);
         assert(value.get!bool == true);
     }
 
+    version(none)
     unittest { // Assign Document[]
         HBSON hbson;
         Document[] docs;
@@ -1751,7 +1762,7 @@ alias HBSAN=HBSON!(true);
     struct KeyIterator {
         protected Members.ConstRange range;
         this(const(HBSON) owner) nothrow {
-            range=owner._members[]:
+            range=owner._members[];
         }
         void popFront() {
             range.popFront;
@@ -1906,7 +1917,7 @@ alias HBSAN=HBSON!(true);
 //     return result;
 // }
 
-
+version(none)
 unittest { // HBSON with const member
     alias GHBSON=HBSON!true;
     auto hbson1=new GHBSON;
@@ -1943,6 +1954,7 @@ unittest { // HBSON with const member
 
 }
 
+version(none)
 unittest { // Test of Native Document type
     // The native document type is only used as an internal representation of the Document
     auto hbson1=new HBSON;

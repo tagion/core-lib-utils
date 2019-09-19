@@ -29,11 +29,14 @@ import std.datetime;   // Date, DateTime
 import std.typecons;   // Tuple
 import std.format;
 import std.traits : isSomeString, isIntegral, isArray;
+import std.algorithm.searching : maxElement;
+//import std.array : Appender;
 private import std.bitmanip;
 import std.meta : AliasSeq;
+//import std.stdio;
 
 import tagion.utils.Miscellaneous : toHexString;
-import tagion.Base : Check, TagionException;
+import tagion.TagionExceptions : Check, TagionException;
 
 public alias HBSON=BSON!(true,true);
 
@@ -62,8 +65,9 @@ enum Type : byte {
         INT64           = 0x12,  /// 64-bit integer,
 
         UINT32          = 0x20,  // 32 bit unsigend integer
+        FLOAT           = 0x21,  // Float 32
         UINT64          = 0x22,  // 64 bit unsigned integer
-        FLOAT           = 0x31,  // Float 32
+        HASHDOC         = 0x23,  // Hash point to documement
         TRUNC           = 0x3f,  // Trunc value for the native type
         MAX             = 0x7f,  /// Special type which compares higher than all other possible BSON element values
         /// Native types is only used inside the BSON object
@@ -215,12 +219,6 @@ template DtoBSONType(T) {
 }
 
 
-@safe
-interface DocumentCallbacks {
-    //bool check(bool flag, string msg, uint code=0);
-    void not_found(lazy string msg, string file = __FILE__, size_t line = __LINE__ );
-}
-
 bool less_than(string a, string b) @safe  {
     bool toUint(string str, out ulong value) @safe {
         foreach(s;str) {
@@ -271,9 +269,7 @@ unittest {
 struct Document {
     immutable(ubyte[]) data;
 
-    static DocumentCallbacks callbacks;
-
-    nothrow this(immutable ubyte[] data) {
+    this(immutable ubyte[] data) nothrow {
         this.data = data;
     }
 
@@ -330,7 +326,7 @@ struct Document {
     }
 
 
-    string toText(string INDENT="  ", string EOL="\n")() {
+    string toText(string INDENT="  ", string EOL="\n")() const {
         enum BETWEEN=","~EOL;
         string object_toText(Document doc, const Type type, immutable(string) indent=null) @safe {
             string buf;
@@ -435,26 +431,22 @@ struct Document {
         }
     }
 
-    Range opSlice() {
+    Range opSlice() const {
         return Range(data);
     }
 
-    @trusted
-    string[] keys() const {
-        import std.array;
-        return array(map!"a.key"(Range(data)));
+    auto keys() const {
+        return map!"a.key"(Range(data));
     }
 
     // Throws an std.conv.ConvException if the keys can not be convert to an uint
-    immutable(uint[]) indices() const {
-        import std.array;
-        return array(map!"a.key.to!uint"(Range(data))).idup;
+    auto indices() const {
+        return map!"a.key.to!uint"(Range(data));
     }
 
     bool hasElement(in string key) const {
         return !opIn_r(key).isEod();
     }
-
 
     bool hasElement(Index)(in Index index) const if (isIntegral!Index) {
         return hasElement(index.to!string);
@@ -471,9 +463,7 @@ struct Document {
 
     const(Element) opIndex(in string key) const {
         auto result=key in this;
-        if ((callbacks !is null) && result.isEod) {
-            callbacks.not_found(format("Member named '%s' not found", key));
-        }
+        .check(!result.isEod, format("Member named '%s' not found", key));
         return result;
     }
 
@@ -514,7 +504,7 @@ unittest {
         assert(count(range) == 3);
     }
     { // keys
-        assert(doc.keys == ["foo", "bool", "num"]);
+        assert(equal(doc.keys, ["foo", "bool", "num"]));
     }
     { // opIndex([])
         auto strElem = doc["foo"];
@@ -664,6 +654,9 @@ public:
                 return t;
             case NONE, UNDEFINED:
                 return 0;
+            case HASHDOC:
+                 assert(0, "Hashdoc not implemented yet");
+                 break;
             case NULL:
                 return 5;
                 case DOUBLE, INT32, INT64:
@@ -788,6 +781,9 @@ public:
             case DBPOINTER:
                 s = bodySize + 4 + 12;
                 break;
+            case HASHDOC:
+                 assert(0, "Hashdoc not implemented yet");
+                 break;
             case REGEX:
                 auto p1 = cast(immutable(char*))_data[1 + rawKeySize..$].ptr;
                 size_t length1 = strlen(p1);
@@ -933,27 +929,18 @@ public:
         }
 
         T[] toArray(T)() const {
-            T[] array;
-            @safe
-            void iterate(Document.Range range, immutable int previous_index=0) {
-                if ( !range.empty ) {
-                    auto e=range.front;
-                    range.popFront;
-                    .check((previous_index is 0) || (previous_index < e.index), format("Index of an Array should be ordred @index %d next %d", previous_index, e.index));
-                    immutable index=e.index;
-                    iterate(range, e.index);
-                    .check(e.istype!T, format("Problem with array type @ %s. Got %s expected %s",
-                            e.key, e.typeString, HBSON.TypeString!T));
-
-                    array[index]=e.get!T;
-                }
-                else if ( previous_index !is 0 ) {
-                    array=new T[previous_index+1];
-                }
-            }
             .check(isArray, format("ARRAY type expected not %s", typeString));
-            auto doc_array=get!Document;
-            iterate(doc_array[]);
+            auto doc=get!Document;
+            auto last_index=doc.indices.maxElement;
+            auto array=new T[last_index+1];
+            uint previous_index;
+            foreach(e; doc[]) {
+                immutable current_index=e.index;
+                .check((previous_index is 0) || (previous_index < current_index), format("Index of an Array should be ordred @index %d next %d", previous_index, current_index));
+
+                array[current_index]=e.get!T;
+                previous_index=current_index;
+            }
             return array;
         }
 
@@ -1250,6 +1237,10 @@ public:
             case ARRAY:
                 //result ~= DOCUMENT.toFormatString(true, full);
                 break;
+             case HASHDOC:
+                  assert(0, "Hashdoc not implemented yet");
+                 break;
+
             case JS_CODE_W_SCOPE:
                 result ~= "codeWScope(" ~ codeWScope ~ ")";
                 // TODO: Add codeWScopeObject
@@ -1625,7 +1616,10 @@ int compareValue(ref const Element lhs, ref const Element rhs) {
         case DOCUMENT,  ARRAY:
             // TODO
             return 0;
-        case BINARY:
+         case HASHDOC:
+              assert(0, "Hashdoc not implemented yet");
+              break;
+         case BINARY:
             immutable ls = lhs.bodySize;
             immutable rs = rhs.bodySize;
 
@@ -2339,7 +2333,10 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
             case NONE:
             case MAX:
             case TRUNC:
-                break;
+                 break;
+            case HASHDOC:
+                 assert(0, "Hashdoc not implemented yet");
+                 break;
             case DOUBLE:
             case FLOAT:
                 static if (is(BaseT:double)) {
@@ -2717,8 +2714,8 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
         auto doc_docs=doc["docs"].get!Document;
 
         assert(doc_docs.length == 3);
-        assert(doc_docs.keys == ["0", "1", "2"]);
-        assert(doc_docs.indices == [0, 1, 2]);
+        assert(equal(doc_docs.keys, ["0", "1", "2"]));
+        assert(equal(doc_docs.indices, [0, 1, 2]));
         foreach(uint i;0..3) {
             assert(doc_docs.hasElement(i.to!string));
             assert(doc_docs.hasElement(i));
@@ -2775,9 +2772,9 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
         }
     }
 
-    @trusted
-    immutable(char)[] toInfo() const {
-        immutable(char)[] result;
+     @trusted
+     immutable(char)[] toInfo() const {
+         immutable(char)[] result;
         with(Type) final switch(_type) {
             case MIN:
             case MAX:
@@ -2834,9 +2831,13 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
             case UINT64:
                 result~=format("%s %s", to!string(_type), value.uint64);
                 break;
-            case TIMESTAMP:
+             case TIMESTAMP:
                 result~=format("%s %s", to!string(_type), value.int64);
                 break;
+             case HASHDOC:
+                  assert(0, "Hashdoc not implemented yet");
+                  break;
+
             case NATIVE_DOCUMENT:
                 result~=format("%s %s", to!string(_type), value.document_array.length);
                 break;
@@ -3050,6 +3051,9 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
                     case BINARY:
                         e.append_binary(data);
                         break;
+                     case HASHDOC:
+                          assert(0, "Hashdoc not implemented yet");
+                          break;
                     case UNDEFINED:
                     case NULL:
                     case MAX:
@@ -3071,7 +3075,9 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
                         data~=zero;
                         break;
                     case DBPOINTER:
+                         assert(0, format("%s not supported", DBPOINTER));
                         break;
+
                     case JS_CODE_W_SCOPE:
                         immutable(ubyte)[] local=e.serialize();
                         // Size of block
@@ -3149,7 +3155,7 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
             assert(doc.hasElement("bool"));
             assert(doc.hasElement("number"));
             assert(doc.hasElement("text"));
-            assert(doc.keys.length == 4);
+            assert(doc.length == 4);
             assert(doc["int"].get!int == 3);
             assert(doc["bool"].get!bool);
             assert(doc["number"].get!double == 1.7);
@@ -3585,9 +3591,10 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
             auto doc=Document(data);
             // writefln("doc.keys=%s", doc.keys);
             // Check that doc.keys are sorted
-            assert(doc.keys == ["abe", "kurt", "ole"]);
+            assert(equal(doc.keys, ["abe", "kurt", "ole"]));
         }
         {
+            import std.array : to_array=array;
             BSON!true[] array;
             for(int i=10; i>-7; i--) {
                 auto len=new BSON!true;
@@ -3599,7 +3606,7 @@ class BSON(bool key_sort_flag=true, bool one_time_write=false) {
             auto data=bson.serialize;
             auto doc=Document(data);
             auto doc_array=doc["array"].get!Document;
-            foreach(i,k;doc_array.keys) {
+            foreach(i,k; to_array(doc_array.keys)) {
                 assert(to!string(i) == k);
             }
         }
