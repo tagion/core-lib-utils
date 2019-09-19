@@ -30,20 +30,20 @@ static assert(uint.sizeof == 4);
 enum Type : ubyte {
 //     MIN             = -1,       /// Special type which compares lower than all other possible BSON element values
     NONE            = 0x00,  /// End Of Document
-        DOUBLE          = 0x01,  /// Floating point
+        FLOAT64          = 0x01,  /// Floating point
         STRING          = 0x02,  /// UTF8 STRING
         DOCUMENT        = 0x03,  /// Embedded document (Both Object and Documents)
         BOOLEAN         = 0x08,  /// Boolean - true or false
-        DATE            = 0x09,  /// UTC datetime
+        UTC             = 0x09,  /// UTC datetime
         INT32           = 0x10,  /// 32-bit integer
         INT64           = 0x12,  /// 64-bit integer,
-        DECIMAL         = 0x13, /// Decimal 128bits
+        FLOAT128        = 0x13, /// Decimal 128bits
         BITINT          = 0x1B,  /// Signed Bigint
 
         UINT32          = 0x20,  // 32 bit unsigend integer
-        FLOAT           = 0x21,  // Float 32
+        FLOAT32         = 0x21,  // 32 bit Float
         UINT64          = 0x22,  // 64 bit unsigned integer
-        HASHDOC         = 0x23,  // Hash point to documement
+//        HASHDOC         = 0x23,  // Hash point to documement
         UBITINT         = 0x2B,  /// Unsigned Bigint
         TRUNC           = 0x3f,  // Trunc value for the native type
 
@@ -67,6 +67,35 @@ enum Type : ubyte {
         }
 
 
+union Value(H) {
+    @Type(Type.FLOAT32)   float float32;
+    @Type(Type.FLOAT64)   double float64;
+    @Type(Type.FLOAT128)  decimal float128;
+    @Type(Type.STRING)    string text;
+    @Type(Type.BOOLEAN)   bool boolean;
+    @Type(Type.HISON)     H hison;
+    @Type(Type.UTC)      ulong date;
+    @Type(Type.INT32)     int int32;
+    @Type(Type.INT64)     long int64;
+    @Type(Type.UINT32)    uint uint32;
+    @Type(Type.UINT64)    ulong uint64;
+    @Type(Type.BINARY)         immutable(ubyte)[] binary;
+    @Type(Type.BOOLEAN_ARRAY)  immutable(bool[])     boolean_array;
+    @Type(Type.INT32_ARRAY)    immutable(int[])      int32_array;
+    @Type(Type.UINT32_ARRAY)   immutable(uint[])     uint32_array;
+    @Type(Type.INT64_ARRAY)    immutable(long[])     int64_array;
+    @Type(Type.UINT64_ARRAY)   immutable(ulong[])    uint64_array;
+    @Type(Type.FLOAT_ARRAY)    immutable(float[])    float32_array;
+    @Type(Type.DOUBLE_ARRAY)   immutable(double[])   float64_array;
+    @Type(Type.FLOAT128_ARRAY) immutable(decimal[]) float128_array;
+    @Type(Type.NATIVE_HIBON_ARRAY) H[]              native_hison_array;
+    @Type(Type.NATIVE_DOCUMENT_ARRAY) Document[]    native_document_array;
+};
+
+
+struct Document {
+}
+version(none) {
 //
 // Define the HBSON Types
 //
@@ -2056,5 +2085,6 @@ unittest { // Test of Native Document type
     // writefln("%s:%d", data2, data2.length);
     assert(data1.length == data2.length);
     assert(data1 == data2);
+}
 }
 }

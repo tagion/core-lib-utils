@@ -18,7 +18,7 @@
  *    (See accompanying file LICENSE_1_0.txt or copy at
  *            http://www.apache.org/licenses/)
  */
-module tagion.utils.HBSON;
+module tagion.utils.HiSON;
 
 /*
   import core.stdc.string;  // Some operations in Phobos not safe, pure and nothrow, e.g. cmp
