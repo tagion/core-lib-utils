@@ -44,6 +44,34 @@ enum Type : ubyte {
         }
 
 
+@safe class HiBON;
+@safe struct Document;
+
+union Value {
+    @Type(Type.FLOAT32)   float   float32;
+    @Type(Type.FLOAT64)   double  float64;
+    @Type(Type.FLOAT128)  decimal_t float128;
+    @Type(Type.STRING)    string  text;
+    @Type(Type.BOOLEAN)   bool    boolean;
+    @Type(Type.DOCUMENT)  HiBON   document;
+    @Type(Type.UTC)       ulong   date;
+    @Type(Type.INT32)     int     int32;
+    @Type(Type.INT64)     long    int64;
+    @Type(Type.UINT32)    uint    uint32;
+    @Type(Type.UINT64)    ulong   uint64;
+    @Type(Type.BINARY)         immutable(ubyte[])   binary;
+    @Type(Type.BOOLEAN_ARRAY)  immutable(bool[])    boolean_array;
+    @Type(Type.INT32_ARRAY)    immutable(int[])     int32_array;
+    @Type(Type.UINT32_ARRAY)   immutable(uint[])    uint32_array;
+    @Type(Type.INT64_ARRAY)    immutable(long[])    int64_array;
+    @Type(Type.UINT64_ARRAY)   immutable(ulong[])   uint64_array;
+    @Type(Type.FLOAT32_ARRAY)  immutable(float[])   float32_array;
+    @Type(Type.FLOAT64_ARRAY)  immutable(double[])  float64_array;
+    @Type(Type.FLOAT128_ARRAY) immutable(decimal_t[]) float128_array;
+    @Type(Type.NATIVE_HIBON_ARRAY)    HiBON[]       native_hison_array;
+    @Type(Type.NATIVE_DOCUMENT_ARRAY) Document[]    native_document_array;
+};
+
 template ValueSeqBase(T, Members...) {
     static if ( Members.length == 0 ) {
         alias ValueSeqBase=AliasSeq!();
@@ -155,3 +183,68 @@ template HiBONTypes(Seq...) {
 alias TypeEnum(T) = Test[staticIndexOf!(T, ValueSeq)+1];
 
 enum  TypeName(T) = Test[staticIndexOf!(T, ValueSeq)+2];
+
+@safe bool is_index(string a, out uint result) pure nothrow {
+        import std.conv : to;
+        enum MAX_UINT_SIZE=to!string(uint.max).length;
+        if ( a.length <= MAX_UINT_SIZE ) {
+            if ( a[0] == '0' ) {
+                return false;
+            }
+            foreach(c; a[1..$]) {
+                if ( (c < '0') || (c > '9') ) {
+                    return false;
+                }
+            }
+            immutable number=a.to!ulong;
+            if ( number <= uint.max ) {
+                result = cast(uint)number;
+                return true;
+            }
+        }
+        return false;
+}
+
+@safe bool less_than(string a, string b) pure nothrow
+    in {
+        assert(a.length > 0);
+        assert(b.length > 0);
+    }
+body {
+    uint a_index;
+    uint b_index;
+    if ( is_index(a, a_index) && is_index(b, b_index) ) {
+        return a_index < b_index;
+    }
+    return a < b;
+}
+
+@safe bool is_key_valid(string a) pure nothrow {
+    enum : char {
+        SPACE = 0x20,
+            DEL = 0x7F,
+            DOUBLE_QUOTE = 34,
+            QUOTE = 39,
+            BACK_QUOTE = 0x60
+            }
+    if ( a.length > 0 ) {
+        foreach(c; a) {
+            // Chars between SPACE and DEL is valid
+            // except for " ' ` is not valid
+            if ( (c <= SPACE) || (c >= DEL) ||
+                ( c == DOUBLE_QUOTE ) || ( c == QUOTE ) ||
+                ( c == BACK_QUOTE ) ) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
+unittest {
+    assert(less_than("abe", "bob"));
+    assert(less_than("0", "abe"));
+    assert(less_than("0", "1"));
+    assert(!less_than("00", "0"));
+}
