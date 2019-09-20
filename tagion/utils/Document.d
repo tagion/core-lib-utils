@@ -303,7 +303,6 @@ struct Element {
     // size_t size() const pure nothrow {
     //     return 0;
     // }
-    alias NonValidDataTypes = AliasSeq!(void, HiBON, HiBON[], Document[]);
 public:
     this(immutable(ubyte[]) data) {
         // In this time, Element does not parse a binary data.
@@ -525,9 +524,7 @@ public:
                 foreach (E; EnumMembers!Type) {
                 case E:
                     alias T=ValueType!E;
-                    pragma(msg, ">> ", E.stringof, " : ", ValueType!E, " | ", T.sizeof);
                     static if ( isOneOf!(T, NonValidDataTypes) ) {
-                        pragma(msg, "Bad ", T);
                         .check(0, format("Illigal HiBSON type %s", E));
                     }
                     else static if ( is(T:U[], U) ) {

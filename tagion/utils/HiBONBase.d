@@ -1,8 +1,26 @@
-import tagion.utils.HiBONBase;
+module tagion.utils.HiBONBase;
+
 
 import tagion.Types;
+import tagion.Base : isOneOf;
+import tagion.TagionExceptions : Check, TagionException;
+
+import std.format;
 import std.meta : AliasSeq; //, Filter;
 import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs;
+
+/**
+ * Exception type used by tagion.utils.BSON module
+ */
+@safe
+class HiBONException : TagionException {
+    this(string msg, string file = __FILE__, size_t line = __LINE__ ) {
+        super( msg, file, line );
+    }
+}
+
+alias check=Check!HiBONException;
+
 
 enum Type : ubyte {
 //     MIN             = -1,       /// Special type which compares lower than all other possible BSON element values
@@ -47,30 +65,69 @@ enum Type : ubyte {
 @safe class HiBON;
 @safe struct Document;
 
-union Value {
+union Value(bool NATIVE=false, TDOC=HiBON) {
     @Type(Type.FLOAT32)   float   float32;
     @Type(Type.FLOAT64)   double  float64;
     @Type(Type.FLOAT128)  decimal_t float128;
     @Type(Type.STRING)    string  text;
-    @Type(Type.BOOLEAN)   bool    boolean;
-    @Type(Type.DOCUMENT)  HiBON   document;
-    @Type(Type.UTC)       ulong   date;
-    @Type(Type.INT32)     int     int32;
-    @Type(Type.INT64)     long    int64;
-    @Type(Type.UINT32)    uint    uint32;
-    @Type(Type.UINT64)    ulong   uint64;
-    @Type(Type.BINARY)         immutable(ubyte[])   binary;
-    @Type(Type.BOOLEAN_ARRAY)  immutable(bool[])    boolean_array;
-    @Type(Type.INT32_ARRAY)    immutable(int[])     int32_array;
-    @Type(Type.UINT32_ARRAY)   immutable(uint[])    uint32_array;
-    @Type(Type.INT64_ARRAY)    immutable(long[])    int64_array;
-    @Type(Type.UINT64_ARRAY)   immutable(ulong[])   uint64_array;
-    @Type(Type.FLOAT32_ARRAY)  immutable(float[])   float32_array;
-    @Type(Type.FLOAT64_ARRAY)  immutable(double[])  float64_array;
-    @Type(Type.FLOAT128_ARRAY) immutable(decimal_t[]) float128_array;
+    @Type(Type.BOOLEAN)   bool     boolean;
+    @Type(Type.DOCUMENT)  TDOC    document;
+    @Type(Type.UTC)       ulong    date;
+    @Type(Type.INT32)     int      int32;
+    @Type(Type.INT64)     long     int64;
+    @Type(Type.UINT32)    uint     uint32;
+    @Type(Type.UINT64)    ulong    uint64;
+    @Type(Type.BINARY)         immutable(ubyte)[]   binary;
+    @Type(Type.BOOLEAN_ARRAY)  immutable(bool)[]    boolean_array;
+    @Type(Type.INT32_ARRAY)    immutable(int)[]     int32_array;
+    @Type(Type.UINT32_ARRAY)   immutable(uint)[]    uint32_array;
+    @Type(Type.INT64_ARRAY)    immutable(long)[]    int64_array;
+    @Type(Type.UINT64_ARRAY)   immutable(ulong)[]   uint64_array;
+    @Type(Type.FLOAT32_ARRAY)  immutable(float)[]   float32_array;
+    @Type(Type.FLOAT64_ARRAY)  immutable(double)[]  float64_array;
+    @Type(Type.FLOAT128_ARRAY) immutable(decimal_t)[] float128_array;
     @Type(Type.NATIVE_HIBON_ARRAY)    HiBON[]       native_hison_array;
     @Type(Type.NATIVE_DOCUMENT_ARRAY) Document[]    native_document_array;
+
+    @Type(Type.NONE) protected template GetFunctions(string text, bool first, TList...) {
+        static if ( TList.length is 0 ) {
+            enum GetFunctions=text~"else {\n    static assert(0, format(\"Not support illegal %s \", type )); \n}";
+        }
+        else {
+            enum name=TList[0];
+            enum member_code="alias member=Value."~name~";";
+            mixin(member_code);
+            alias MemberT=typeof(member);
+            enum MemberType=getUDAs!(member, Type)[0];
+            static if ( (MemberType is Type.NONE) || ( !NATIVE && isOneOf!(MemberT, NativeValueDataTypes)) ) {
+                enum code="";
+            }
+            else {
+                enum code = format("%sstatic if ( type is Type.%s ) {\n    return %s;\n}\n",
+                    (first)?"":"else ", MemberType, name);
+            }
+            enum GetFunctions=GetFunctions!(text~code, false, TList[1..$]);
+        }
+    }
+
+    @Type(Type.NONE) auto get(alias type)() {
+        enum code=GetFunctions!("", true, __traits(allMembers, Value!NATIVE));
+        mixin(code);
+        assert(0);
+    }
+
 };
+
+
+unittest {
+    import std.stdio;
+    Value!(false, HiBON) value;
+    value.int32=10;
+    auto x=value.get!(Type.INT32);
+    value.float32=13.45;
+    auto y=value.get!(Type.FLOAT32);
+
+}
 
 template ValueSeqBase(T, Members...) {
     static if ( Members.length == 0 ) {
@@ -82,13 +139,18 @@ template ValueSeqBase(T, Members...) {
         mixin(code);
         alias MemberT=typeof(member);
         enum MemberUDA=getUDAs!(member, Type)[0];
-        alias MemberSeq=AliasSeq!(MemberT, MemberUDA, name);
+        static if ( Type.NONE == MemberUDA ) {
+            alias MemberSeq=AliasSeq!();
+        }
+        else {
+            alias MemberSeq=AliasSeq!(MemberT, MemberUDA, name);
+        }
         alias ValueSeqBase=AliasSeq!(MemberSeq, ValueSeqBase!(T, Members[1..$]));
     }
 }
 
 //alias ValueSeq(T, H) = ValueSeq!(T, __traits(allMembers, T));
-alias ValueSeq = ValueSeqBase!(Value, __traits(allMembers, Value));
+alias ValueSeq(V) = ValueSeqBase!(Value, __traits(allMembers, V));
 
 template ValueTypeBase(Type type, Seq...) {
 //    static assert(Seg.length == 0, format("Type %s not supported", type));
@@ -132,11 +194,11 @@ template ValueSeqFilterBase(alias pred, Seq...) {
 }
 
 // HBSON DType sequency Filter
-alias ValueSeqFilter(alias pred)=ValueSeqFilterBase!(pred, ValueSeq);
+alias ValueSeqFilter(V, alias pred)=ValueSeqFilterBase!(pred, V);
 
 enum isValueBasicType(TList...) = isBasicType!(TList[0]) && (TList[1] !is Type.UTC);
 
-alias ValueSeqBasicTypes=ValueSeqFilter!(isValueBasicType);
+alias ValueSeqBasicTypes(V)=ValueSeqFilter!(V, isValueBasicType);
 
 template isValueBinaryType(T) {
     static if ( is(T:immutable(decimal_t)[]) ) {
@@ -150,15 +212,15 @@ template isValueBinaryType(T) {
     }
 }
 
-alias ValueSeqBinaryTypes=ValueSeqFilter!(isValueBinaryType);
+alias ValueSeqBinaryTypes(V)=ValueSeqFilter!(V, isValueBinaryType);
 
 enum isValueIntegralType(TList...) = isIntegral!(TList[0]) && (TList[1] !is Type.UTC);
 
-alias ValueSeqIntegralTypes = ValueSeqFilter!(isValueIntegralType);
+alias ValueSeqIntegralTypes(V) = ValueSeqFilter!(V, isValueIntegralType);
 
 enum isValueNumericType(TList...) = isNumeric!(TList[0]) && (TList[1] !is Type.UTC);
 
-alias ValueSeqNumericTypes = ValueSeqFilter!(isValueNumericType);
+alias ValueSeqNumericTypes(V) = ValueSeqFilter!(V, isValueNumericType);
 
 template DTypes(Seq...) {
     static if ( Seq.length == 0 ) {
@@ -184,6 +246,9 @@ alias TypeEnum(T) = Test[staticIndexOf!(T, ValueSeq)+1];
 
 enum  TypeName(T) = Test[staticIndexOf!(T, ValueSeq)+2];
 
+alias NativeValueDataTypes = AliasSeq!(HiBON, HiBON[], Document[]);
+
+version(none)
 @safe bool is_index(string a, out uint result) pure nothrow {
         import std.conv : to;
         enum MAX_UINT_SIZE=to!string(uint.max).length;
@@ -205,6 +270,7 @@ enum  TypeName(T) = Test[staticIndexOf!(T, ValueSeq)+2];
         return false;
 }
 
+version(none)
 @safe bool less_than(string a, string b) pure nothrow
     in {
         assert(a.length > 0);
@@ -242,6 +308,7 @@ body {
     return false;
 }
 
+version(none)
 unittest {
     assert(less_than("abe", "bob"));
     assert(less_than("0", "abe"));
