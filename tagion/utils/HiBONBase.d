@@ -97,8 +97,8 @@ union Value(bool NATIVE=false, TDOC=HiBON) {
             enum name=TList[0];
             enum member_code="alias member=Value."~name~";";
             mixin(member_code);
-            alias MemberT=typeof(member);
             enum MemberType=getUDAs!(member, Type)[0];
+            alias MemberT=typeof(member);
             static if ( (MemberType is Type.NONE) || ( !NATIVE && isOneOf!(MemberT, NativeValueDataTypes)) ) {
                 enum code="";
             }
@@ -111,9 +111,22 @@ union Value(bool NATIVE=false, TDOC=HiBON) {
     }
 
     @Type(Type.NONE) auto get(alias type)() {
-        enum code=GetFunctions!("", true, __traits(allMembers, Value!NATIVE));
+        enum code=GetFunctions!("", true, __traits(allMembers, Value));
         mixin(code);
         assert(0);
+    }
+
+    @Type(Type.NONE) void opAssign(T)(T x) if (isOneOf!(T, typeof(this.tupleof))) {
+        pragma(msg, typeof(this.tupleof));
+        static foreach(m; __traits(allMembers, Value) ) {
+            static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
+                enum code="alias member=Value."~m~";";
+                mixin(code);
+                enum MemberType=getUDAs!(member, Type)[0];
+                static assert ( MemberType !is Type.NONE, format("%s is not supported", T ) );
+                __traits(getMember, this, m) = x;
+            }
+        }
     }
 
 };
@@ -127,6 +140,12 @@ unittest {
     value.float32=13.45;
     auto y=value.get!(Type.FLOAT32);
 
+    value=1;
+    value=1.3;
+
+//    char a='x';
+    static assert(!__traits(compiles, value='x'));
+    //value=a;
 }
 
 template ValueSeqBase(T, Members...) {
@@ -150,7 +169,7 @@ template ValueSeqBase(T, Members...) {
 }
 
 //alias ValueSeq(T, H) = ValueSeq!(T, __traits(allMembers, T));
-alias ValueSeq(V) = ValueSeqBase!(Value, __traits(allMembers, V));
+alias ValueSeq(V) = ValueSeqBase!(V, __traits(allMembers, V));
 
 template ValueTypeBase(Type type, Seq...) {
 //    static assert(Seg.length == 0, format("Type %s not supported", type));
@@ -166,7 +185,7 @@ template ValueTypeBase(Type type, Seq...) {
     }
 }
 
-alias ValueType(Type type) = ValueTypeBase!(type, ValueSeq);
+alias ValueType(Type type, VSeq...) = ValueTypeBase!(type, VSeq);
 
 template ValueSeqFilterBase(alias pred, Seq...) {
     static if (Seq.length == 0) {
@@ -194,11 +213,11 @@ template ValueSeqFilterBase(alias pred, Seq...) {
 }
 
 // HBSON DType sequency Filter
-alias ValueSeqFilter(V, alias pred)=ValueSeqFilterBase!(pred, V);
+alias ValueSeqFilter(VSeq, alias pred)=ValueSeqFilterBase!(pred, VSeq);
 
 enum isValueBasicType(TList...) = isBasicType!(TList[0]) && (TList[1] !is Type.UTC);
 
-alias ValueSeqBasicTypes(V)=ValueSeqFilter!(V, isValueBasicType);
+alias ValueSeqBasicTypes(VSeq)=ValueSeqFilter!(VSeq, isValueBasicType);
 
 template isValueBinaryType(T) {
     static if ( is(T:immutable(decimal_t)[]) ) {
@@ -242,36 +261,34 @@ template HiBONTypes(Seq...) {
 }
 
 
-alias TypeEnum(T) = Test[staticIndexOf!(T, ValueSeq)+1];
+//alias TypeEnum(T, VSeg...) = VSeq[staticIndexOf!(T, VSeq)+1];
 
-enum  TypeName(T) = Test[staticIndexOf!(T, ValueSeq)+2];
+//enum  TypeName(T, VSeq...) = VSeq[staticIndexOf!(T, VSeq)+2];
 
 alias NativeValueDataTypes = AliasSeq!(HiBON, HiBON[], Document[]);
 
-version(none)
-@safe bool is_index(string a, out uint result) pure nothrow {
-        import std.conv : to;
-        enum MAX_UINT_SIZE=to!string(uint.max).length;
-        if ( a.length <= MAX_UINT_SIZE ) {
-            if ( a[0] == '0' ) {
+@safe bool is_index(string a, out uint result) pure {
+    import std.conv : to;
+    enum MAX_UINT_SIZE=to!string(uint.max).length;
+    if ( a.length <= MAX_UINT_SIZE ) {
+        if ( a[0] == '0' ) {
+            return false;
+        }
+        foreach(c; a[1..$]) {
+            if ( (c < '0') || (c > '9') ) {
                 return false;
             }
-            foreach(c; a[1..$]) {
-                if ( (c < '0') || (c > '9') ) {
-                    return false;
-                }
-            }
-            immutable number=a.to!ulong;
-            if ( number <= uint.max ) {
-                result = cast(uint)number;
-                return true;
-            }
         }
-        return false;
+        immutable number=a.to!ulong;
+        if ( number <= uint.max ) {
+            result = cast(uint)number;
+            return true;
+        }
+    }
+    return false;
 }
 
-version(none)
-@safe bool less_than(string a, string b) pure nothrow
+@safe bool less_than(string a, string b) pure
     in {
         assert(a.length > 0);
         assert(b.length > 0);
@@ -308,7 +325,6 @@ body {
     return false;
 }
 
-version(none)
 unittest {
     assert(less_than("abe", "bob"));
     assert(less_than("0", "abe"));

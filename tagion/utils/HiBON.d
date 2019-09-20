@@ -13,11 +13,12 @@ module tagion.utils.HiBON;
 
 
 import std.datetime;   // Date, DateTime
+import std.container : RedBlackTree;
+import std.format;
+import std.meta : staticIndexOf;
+
 import tagion.utils.Document;
 import tagion.utils.HiBONBase;
-
-
-
 
 
 version(none)
@@ -66,8 +67,14 @@ ubyte[] fromHex(in string hex) pure nothrow {
 //
 //alias HBSAN=HiBON!(true);
 
-version(none)
 @safe class HiBON {
+    alias ValueT=Value!(true, HiBON);
+    alias ValueSeq = .ValueSeq!(ValueT);
+
+    alias TypeEnum(T) = ValueSeq[staticIndexOf!(T, ValueSeq)+1];
+
+    enum  TypeName(T) = ValueSeq[staticIndexOf!(T, ValueSeq)+2];
+
     version(none)
     static string TypeString(T)() {
         alias BaseT=TypedefType!T;
@@ -91,54 +98,40 @@ version(none)
         }
     }
 
-
-    package Type _type;
-//    package BinarySubType _subtype;
     struct Member {
         string key;
-        HiBON element;
+        Type type;
+        ValueT value;
     }
-    alias Members=RedBlackTree!(immutable(Member), "less_than(a.key, b.key)");
+
+    alias Members=RedBlackTree!(Member, (a, b) => (less_than(a.key, b.key)));
     protected Members _members;
-//    redBlackTree!("a.begin_index < b.begin_index")(recycle_segments[]);
-//    alias red
-//    private HiBON members; // List of members
-//    private string[] _key;
-//    public bool typedarray; // Start standard type array as Binary data (like double[])
-    //  public bool no_duble; // This will prevent the HiBON object from creating double or multiple members
-//     string key() @safe pure nothrow const {
-// //        assert(0, "Not implemented Yet");
-//         return _key;
-//     }
-
-//     private _key;
-
-
-    /+
-    auto set(T)() {
-        static if (is(T ==
-    }
-    this() {
-        _type=Type.DOCUMENT;
-    }
-+/
-    //@property
-    // @trusted
-    // size_t id() const pure nothrow {
-    //     return cast(size_t)(cast(void*)this);
-    // }
 
     void check_type(DTYPE)(string file = __FILE__, size_t line = __LINE__ ){
         enum type_to_be_check=DtoHiBONType!DTYPE;
         static if ( is(typeof(type_to_be_check) == BinarySubType ) ) {
-            check(_type == Type.BINARY, format("Bad type %s expected %s", Type.BINARY, _type), file, line);
+            .check(_type == Type.BINARY, format("Bad type %s expected %s", Type.BINARY, _type), file, line);
 //            check(_subtype == Type.BINARY, format("Bad type %s expected %s", Type.BINARY, _type), file, line);
-            check(_subtype == type_to_be_check, format("Bad sub-type %s expected %s", type_to_be_check, _subtype), file, line);
+            .check(_subtype == type_to_be_check, format("Bad sub-type %s expected %s", type_to_be_check, _subtype), file, line);
 
         }
         else {
-            check(_type == type_to_be_check, format("Bad type %s expected %s", type_to_be_check, _type), file, line);
+            .check(_type == type_to_be_check, format("Bad type %s expected %s", type_to_be_check, _type), file, line);
         }
+    }
+
+    void opIndexAssign(T)(T x, string key) {
+        .check(is_key_valid(key), format("Key is not a valid format '%s'", key));
+        ValueT value;
+        value=x;
+        Member new_member={key : key, type : TypeEnum!T, value};
+        // .check(_members.equalRange(member).empty, format("Member with key '%s' already exists", key));
+        _members.insert(new_member);
+    }
+
+    unittest {
+        auto hibon=new HiBON;
+        hibon["int"]=10;
     }
 
     inout(T) get(T)() inout {
@@ -150,7 +143,7 @@ version(none)
                         .check(0, format("Illigal HiBSON type %s", E));
                     }
                     else {
-                        return value[type];
+                        return value!E;
                     }
                     break;
                 }
@@ -159,158 +152,8 @@ version(none)
     }
 
     version(none)
-    @trusted
-    auto get(T)() inout {
-
-        alias BaseT=TypedefType!T;
-        alias UnqualT=Unqual!BaseT;
-        static if (is(UnqualT == double)) {
-            check!UnqualT;
-//                assert(_type == Type.DOUBLE);
-            return cast(T)(value.number);
-        }
-        else static if (is(UnqualT == string)) {
-            check!UnqualT;
-//            assert(_type == Type.STRING);
-            return cast(T)(value.text);
-        }
-        else static if (is(UnqualT == bool)) {
-            check!UnqualT;
-
-//            assert(_type == Type.BOOLEAN);
-            return cast(T)(value.boolean);
-        }
-        else static if (is(BaseT:const(HiBON))) {
-
-            assert(_type == Type.DOCUMENT);
-            return cast(T)(value.document);
-        }
-        else static if (is(BaseT:const(Document))) {
-            assert(_type == Type.NATIVE_DOCUMENT);
-            return Document(assumeUnique(value.binary));
-        }
-        /*
-        else static if (is(BaseT==ObjectId)) {
-            assert(_type == Type.OID);
-            return cast(T)(value.oid);
-        }
-        */
-        else static if (is(UnqualT == int)) {
-            check!UnqualT;
-//            assert(_type == Type.INT32);
-            return cast(T)(value.int32);
-        }
-        else static if (is(UnqualT  == uint)) {
-            check!UnqualT;
-//            assert(_type == Type.UINT32);
-            return cast(T)(value.uint32);
-        }
-        else static if (is(UnqualT == long)) {
-            check!UnqualT;
-//            assert(_type == Type.INT64);
-            return cast(T)(value.int64);
-        }
-        else static if (is(UnqualT == ulong)) {
-            check!UnqualT;
-//            assert(_type == Type.UINT64);
-            return cast(T)(value.uint64);
-        }
-        else static if (is(BaseT==Date)) {
-            check!UnqualT;
-            assert(_type == Type.DATE);
-            return cast(T)(value.date);
-        }
-        // else static if (is(BaseT==CodeScope)) {
-        //     assert(_type == Type.JS_CODE_SCOPE);
-        //     return cast(T)(value.codescope);
-        // }
-        /*
-        else static if (is(BaseT:string[])) {
-            assert(_type == Type.NATIVE_STRING_ARRAY);
-            return cast(T)(value.text_array);
-        }
-        */
-        else static if ( is(UnqualT : immutable(ubyte[])) ) {
-            check!UnqualT;
-//            assert(_type == Type.BINARY);
-            return cast(T)(value.binary);
-        }
-        else static if (is(UnqualT  : immutable(bool[])) ) {
-            check!UnqualT;
-//            assert(_type == Type.ARRAY);
-//            assert(subtype == BinarySubType.BOOLEAN_array);
-            return cast(T)(value.bool_array);
-        }
-        else static if (is(UnqualT : immutable(int)[])) {
-            check!UnqualT;
-            assert(_type == Type.ARRAY);
-            assert(subtype == BinarySubType.INT32_array);
-            return cast(T)(value.int32_array);
-        }
-        else static if (is(UnqualT : immutable(uint[]))) {
-            check!UnqualT;
-            // assert(_type == Type.ARRAY);
-            // assert(subtype == BinarySubType.UINT32_array);
-            return cast(T)(value.uint32_array);
-        }
-        else static if (is(UnqualT : immutable(ulong[]))) {
-            check!UnqualT;
-            // assert(_type == Type.ARRAY);
-            // assert(subtype == BinarySubType.UINT64_array);
-            return cast(T)(value.uint64_array);
-        }
-        else static if (is(UnqualT : immutable(long[]))) {
-            check!UnqualT;
-            // assert(_type == Type.ARRAY);
-            // assert(subtype == BinarySubType.INT64_array);
-            return cast(T)(value.int64_array);
-        }
-        else static if (is(UnqualT : immutable(float[]))) {
-            check!UnqualT;
-            // assert(_type == Type.ARRAY);
-            // assert(subtype == BinarySubType.FLOAT_array);
-            return cast(T)(value.float_array);
-        }
-        else static if (is(UnqualT : immutable(double[]))) {
-            check!UnqualT;
-            // assert(_type == Type.ARRAY);
-            // assert(subtype == BinarySubType.DOUBLE_array);
-            return cast(T)(value.double_array);
-        }
-        else static if (is(UnqualT : immutable(decimal[]))) {
-            check!UnqualT;
-            // assert(_type == Type.ARRAY);
-            // assert(subtype == BinarySubType.DOUBLE_array);
-            return cast(T)(value.double_array);
-        }
-        // else static if (is(BaseT:U[],U) && isSomeString!U) {
-        //     assert(_type == Type.ARRAY);
-        //     assert(subtype == BinarySubType.STRING_array);
-        //     return cast(T)(value.text_array);
-        // }
-        else static if (is(BaseT==HiBON[])) {
-            check(_type == Type.NATIVE_HiBON_ARRAY, format("%s is not compatible with %s type", BaseT.stringof, _type));
-//            assert(_type == Type.NATIVE_HiBON_ARRAY);
-            return cast(T)(value.hbson_array);
-        }
-        else static if (is(BaseT==Document[])) {
-            check(_type == Type.NATIVE_DOCUMENT_ARRAY, format("%s is not compatible with %s type", BaseT.stringof, _type));
-//            assert(_type == Type.NATIVE_ARRAY);
-            return cast(T)(value.document_array);
-        }
-        else {
-            static if ( !isSomeString!T && is(T:U[]) && !is(U == immutable) ) {
-                static assert(0, format("Only immutable array is supported not %s", T.stringof));
-            }
-            static assert(0, format("Type %s is not supported by this function",T.stringof));
-        }
-
-
-    }
-
-    package Value value;
     bool isDocument() {
-        return ( (type == Type.DOCUMENT) || (type == Type.ARRAY) );
+        return (type == Type.DOCUMENT);
     }
 
     void append(T)(string key, T x) {
@@ -518,10 +361,12 @@ version(none)
     }
     */
 
+    version(none)
     void opIndexAssign(T, Index)(T x, const Index index) if (isIntegral!Index) {
         opIndexAssign(x, index.to!string);
     }
 
+    version(none)
     void opIndexAssign(T)(T x, string key) {
         alias BaseT=TypedefType!T;
         alias UnqualT=Unqual!BaseT;
@@ -695,6 +540,7 @@ version(none)
         }
     }
 
+    version(none)
     inout(HiBON) opIndex(const(char)[] key) inout {
 
         auto iter=Iterator!(const(HiBON), false)(this);
@@ -708,6 +554,7 @@ version(none)
         assert(0);
     }
 
+    version(none)
     HiBON opIndex(string key) {
         immutable search={key : key};
         auto range=_members.lowerBound(search);
@@ -715,15 +562,18 @@ version(none)
         return range.front;
     }
 
+    version(none)
     bool hasElement(string key) const {
         immutable search={key : key};
         return !(_members.lowerBound(search).empty);
     }
 
+    version(none)
     Type type() pure const nothrow {
         return _type;
     }
 
+    version(none)
     string typeString() pure const  {
         if ( _type is Type.BINARY ) {
             return subtype.to!string;
@@ -733,6 +583,7 @@ version(none)
         }
     }
 
+    version(none)
     @trusted
     immutable(char)[] toInfo() const {
         immutable(char)[] result;
@@ -971,6 +822,7 @@ version(none)
     }
 
 
+    version(none)
     immutable(ubyte)[] serialize() const {
         immutable(ubyte)[] local_serialize() {
             immutable(ubyte)[] data;
@@ -1080,7 +932,7 @@ version(none)
         return data;
     }
 
-//    version(none)
+    version(none)
     unittest {
         HiBON hbson1=new HiBON;
 
@@ -1141,6 +993,7 @@ version(none)
         }
     }
 
+    version(none)
     unittest { // Test of serializing of a cost(HiBON)
         auto stream(const(HiBON) b) {
             return b.serialize;
@@ -1167,6 +1020,7 @@ version(none)
         }
     }
 
+    version(none)
     unittest {
         // Test D array types
         HiBON hbson;
@@ -1311,6 +1165,7 @@ version(none)
         }
     }
 
+    version(none)
     unittest  {
         // Buffer as binary arrays
         HiBON hbson;
@@ -1399,6 +1254,7 @@ version(none)
         }
     }
 
+    version(none)
     bool duble() {
         auto iter=iterator;
         for(; !iter.empty; iter.popFront) {
@@ -1413,6 +1269,7 @@ version(none)
     }
 
 
+    version(none)
     bool remove(string key) {
         auto iter=iterator;
         bool result;
@@ -1434,6 +1291,7 @@ version(none)
         return result;
     }
 
+    version(none)
     unittest {
         static if (!one_time_write) {
             // Remove and duble check
@@ -1467,15 +1325,18 @@ version(none)
         }
     }
 
+    version(none)
     Iterator!(HiBON, F) iterator(bool F=false)() {
         return Iterator!(HiBON, F)(this);
     }
 
+    version(none)
     Iterator!(const(HiBON), F) iterator(bool F=false)() const {
         return Iterator!(const(HiBON), F)(this);
     }
 
 
+    version(none)
     @trusted
     protected immutable(ubyte)[] subtype_buffer() const {
         with(BinarySubType) final switch(subtype) {
@@ -1512,6 +1373,7 @@ version(none)
 
     }
 
+    version(none)
     protected void append_binary(ref immutable(ubyte)[] data) const {
         scope binary=subtype_buffer;
         data~=nativeToLittleEndian(cast(uint)(binary.length));
@@ -1520,6 +1382,7 @@ version(none)
     }
 
 
+    version(none)
     Members.ConstRange keys() pure const nothrow {
         return KeyIterator(this);
     }
@@ -1528,6 +1391,7 @@ version(none)
         return _members.length;
     }
 
+    version(none)
     unittest {
         // Test keys function
         // and the sorted HiBON
@@ -1565,14 +1429,17 @@ version(none)
 
     }
 
+    version(none)
     int opApply(scope int delegate(HiBON hbson) @safe dg) {
         return iterator.opApply(dg);
     }
 
+    version(none)
     int opApply(scope int delegate(in string key, HiBON hbson) @safe dg) {
         return iterator.opApply(dg);
     }
 
+    version(none)
     @safe
     struct KeyIterator {
         protected Members.ConstRange range;
@@ -1590,6 +1457,7 @@ version(none)
         }
     }
 
+    version(none)
     @safe
     struct Iterator(THiBON, bool key_sort_flag) {
         static assert( is (THiBON:const(HiBON)), format("Iterator only supports %s ",HiBON.stringof));

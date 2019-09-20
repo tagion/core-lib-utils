@@ -30,7 +30,7 @@ import tagion.utils.HiBONBase;
 //import std.stdio;
 
 import tagion.utils.Miscellaneous : toHexString;
-import tagion.TagionExceptions : Check, TagionException;
+//import tagion.TagionExceptions : Check, TagionException;
 
 //public alias HBSON=BSON!(true,true);
 
@@ -39,13 +39,18 @@ static assert(uint.sizeof == 4);
 
 
 @safe struct Document {
-    pragma(msg, ValueSeqBasicTypes);
-    pragma(msg, ValueSeqBinaryTypes);
+    protected alias ValueT=Value!(false, Document);
+    alias ValueSeq = .ValueSeq!(ValueT);
+    alias ValueType(Type type) = .ValueType!(type, ValueSeq);
     pragma(msg, ValueSeq);
-    pragma(msg, ValueSeqIntegralTypes);
-    pragma(msg, ValueSeqNumericTypes);
-    enum table=HiBONTypes!(ValueSeqNumericTypes);
-    pragma(msg, table.stringof);
+    //alias ValueSeqBasicTypes = ValueSeqBasicTypes!(ValueSeq);
+    //pragma(msg, ValueSeqBasicTypes);
+    // pragma(msg, ValueSeqBinaryTypes);
+    // pragma(msg, ValueSeq);
+    // pragma(msg, ValueSeqIntegralTypes);
+    // pragma(msg, ValueSeqNumericTypes);
+    // enum table=HiBONTypes!(ValueSeqNumericTypes);
+    // pragma(msg, table.stringof);
     immutable(ubyte[]) data;
 
     this(immutable ubyte[] data) nothrow {
@@ -235,7 +240,6 @@ static assert(uint.sizeof == 4);
             return "";
         }
     }
-}
 
 
 version(none) {
@@ -524,7 +528,7 @@ public:
                 foreach (E; EnumMembers!Type) {
                 case E:
                     alias T=ValueType!E;
-                    static if ( isOneOf!(T, NonValidDataTypes) ) {
+                    static if ( isOneOf!(T, NativeValueDataTypes) ) {
                         .check(0, format("Illigal HiBSON type %s", E));
                     }
                     else static if ( is(T:U[], U) ) {
@@ -996,6 +1000,7 @@ private:
     }
 
 }
+}
 
 
 
@@ -1391,19 +1396,6 @@ unittest
 
     // TODO: Add other type tests
 }
-
-
-/**
- * Exception type used by tagion.utils.BSON module
- */
-@safe
-class BSONException : TagionException {
-    this(string msg, string file = __FILE__, size_t line = __LINE__ ) {
-        super( msg, file, line );
-    }
-}
-
-alias check=Check!BSONException;
 
 
 /**
