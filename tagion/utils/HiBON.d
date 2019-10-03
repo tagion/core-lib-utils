@@ -120,13 +120,19 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
     }
 
-    void opIndexAssign(T)(T x, string key) {
+    void opIndexAssign(T)(T x, in string key) {
         .check(is_key_valid(key), format("Key is not a valid format '%s'", key));
         ValueT value;
         value=x;
         Member new_member={key : key, type : TypeEnum!T, value};
-        // .check(_members.equalRange(member).empty, format("Member with key '%s' already exists", key));
         _members.insert(new_member);
+    }
+
+    inout(ValueT) opIndex(in string key) inout {
+        Member search_member={key : key};
+        auto range=_member.rbt.equalRange(search_member);
+        .check(range.empty, format("Member '%s' does not exist", key) );
+        return range.front.value;
     }
 
     unittest {
