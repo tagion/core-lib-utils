@@ -39,10 +39,10 @@ static assert(uint.sizeof == 4);
 
 
 @safe struct Document {
-    protected alias ValueT=Value!(false, Document);
-    alias ValueSeq = .ValueSeq!(ValueT);
-    alias ValueType(Type type) = .ValueType!(type, ValueSeq);
-    pragma(msg, ValueSeq);
+    protected alias Value=ValueT!(false, void, Document);
+    // alias ValueSeq = .ValueSeq!(Value);
+    // alias ValueType(Type type) = .ValueType!(type, ValueSeq);
+    // pragma(msg, ValueSeq);
     //alias ValueSeqBasicTypes = ValueSeqBasicTypes!(ValueSeq);
     //pragma(msg, ValueSeqBasicTypes);
     // pragma(msg, ValueSeqBinaryTypes);
@@ -57,9 +57,29 @@ static assert(uint.sizeof == 4);
         this.data = data;
     }
 
+    this(const Document document) nothrow {
+        this.data = document.data;
+    }
+
+    @trusted
+    void copy(Document* doc_ptr)
+        in {
+            assert(doc_ptr !is null);
+        }
+    do {
+//         extern(C) void* memcpy (
+//   scope return void* s1,
+//   scope const(void*) s2,
+//   ulong n
+// ) pure nothrow @nogc;
+        import core.stdc.string : memcpy;
+        memcpy(doc_ptr, &this, this.sizeof);
+    }
+    /*
     Document idup() const nothrow {
         return Document(data.idup);
     }
+    */
 
     @property nothrow pure const {
         @safe bool empty() {
@@ -528,7 +548,7 @@ public:
                 foreach (E; EnumMembers!Type) {
                 case E:
                     alias T=ValueType!E;
-                    static if ( isOneOf!(T, NativeValueDataTypes) ) {
+                    static if ( isOneOf!(T, Value.NativeValueDataTypes) ) {
                         .check(0, format("Illigal HiBSON type %s", E));
                     }
                     else static if ( is(T:U[], U) ) {

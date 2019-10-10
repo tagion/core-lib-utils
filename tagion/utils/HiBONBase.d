@@ -7,7 +7,7 @@ import tagion.TagionExceptions : Check, TagionException;
 
 import std.format;
 import std.meta : AliasSeq; //, Filter;
-import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs;
+import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, isType, getUDAs, hasUDA;
 
 /**
  * Exception type used by tagion.utils.BSON module
@@ -28,19 +28,20 @@ enum Type : ubyte {
         FLOAT64         = 0x01,  /// Floating point
         STRING          = 0x02,  /// UTF8 STRING
         DOCUMENT        = 0x03,  /// Embedded document (Both Object and Documents)
+        LIST            = 0x04,  /// Array List
         BOOLEAN         = 0x08,  /// Boolean - true or false
         UTC             = 0x09,  /// UTC datetime
         INT32           = 0x10,  /// 32-bit integer
         INT64           = 0x12,  /// 64-bit integer,
-        FLOAT128        = 0x13, /// Decimal 128bits
-        BITINT          = 0x1B,  /// Signed Bigint
+        //       FLOAT128        = 0x13, /// Decimal 128bits
+        //       BIGINT          = 0x1B,  /// Signed Bigint
 
         UINT32          = 0x20,  // 32 bit unsigend integer
         FLOAT32         = 0x21,  // 32 bit Float
         UINT64          = 0x22,  // 64 bit unsigned integer
 //        HASHDOC         = 0x23,  // Hash point to documement
-        UBITINT         = 0x2B,  /// Unsigned Bigint
-        TRUNC           = 0x3f,  // Trunc value for the native type
+//        UBIGINT         = 0x2B,  /// Unsigned Bigint
+//        TRUNC           = 0x3f,  // Trunc value for the native type
 
         NATIVE_DOCUMENT = 0x40 | DOCUMENT, // This type is only used as an internal represention (Document type)
 
@@ -53,7 +54,7 @@ enum Type : ubyte {
         UINT32_ARRAY    = DEFINED_ARRAY | UINT32,
         UINT64_ARRAY    = DEFINED_ARRAY | UINT64,
         FLOAT32_ARRAY    = DEFINED_ARRAY | FLOAT32,
-        FLOAT128_ARRAY   = DEFINED_ARRAY | FLOAT128,
+        //     FLOAT128_ARRAY   = DEFINED_ARRAY | FLOAT128,
 
         /// Native types is only used inside the BSON object
         NATIVE_HIBON_ARRAY    = DEFINED_ARRAY | DOCUMENT, // Represetents (HISON[]) is convert to an ARRAY of DOCUMENT's
@@ -63,20 +64,29 @@ enum Type : ubyte {
 
 
 @safe class HiBON;
-@safe struct Document;
+//@safe struct Document;
 
-union Value(bool NATIVE=false, TDOC=HiBON) {
-    @Type(Type.FLOAT32)   float   float32;
-    @Type(Type.FLOAT64)   double  float64;
-    @Type(Type.FLOAT128)  decimal_t float128;
-    @Type(Type.STRING)    string  text;
-    @Type(Type.BOOLEAN)   bool     boolean;
-    @Type(Type.DOCUMENT)  TDOC    document;
-    @Type(Type.UTC)       ulong    date;
-    @Type(Type.INT32)     int      int32;
-    @Type(Type.INT64)     long     int64;
-    @Type(Type.UINT32)    uint     uint32;
-    @Type(Type.UINT64)    ulong    uint64;
+enum isBasicValueType(T) = isBasicType!T || is(T : decimal_t);
+
+@safe
+union ValueT(bool NATIVE=false, HiBON,  Document) {
+    @Type(Type.FLOAT32)   float     float32;
+    @Type(Type.FLOAT64)   double    float64;
+    // @Type(Type.FLOAT128)  decimal_t float128;
+    @Type(Type.STRING)    string    text;
+    @Type(Type.BOOLEAN)   bool      boolean;
+    //  @Type(Type.LIST)
+    static if ( !is(HiBON == void ) ) {
+        @Type(Type.DOCUMENT)  HiBON      document;
+    }
+    @Type(Type.UTC)       ulong     date;
+    @Type(Type.INT32)     int       int32;
+    @Type(Type.INT64)     long      int64;
+    @Type(Type.UINT32)    uint      uint32;
+    @Type(Type.UINT64)    ulong     uint64;
+    static if ( !is(Document == void) ) {
+        @Type(Type.NATIVE_DOCUMENT) Document    native_document;
+    }
     @Type(Type.BINARY)         immutable(ubyte)[]   binary;
     @Type(Type.BOOLEAN_ARRAY)  immutable(bool)[]    boolean_array;
     @Type(Type.INT32_ARRAY)    immutable(int)[]     int32_array;
@@ -85,47 +95,144 @@ union Value(bool NATIVE=false, TDOC=HiBON) {
     @Type(Type.UINT64_ARRAY)   immutable(ulong)[]   uint64_array;
     @Type(Type.FLOAT32_ARRAY)  immutable(float)[]   float32_array;
     @Type(Type.FLOAT64_ARRAY)  immutable(double)[]  float64_array;
-    @Type(Type.FLOAT128_ARRAY) immutable(decimal_t)[] float128_array;
-    @Type(Type.NATIVE_HIBON_ARRAY)    HiBON[]       native_hison_array;
-    @Type(Type.NATIVE_DOCUMENT_ARRAY) Document[]    native_document_array;
+    // @Type(Type.FLOAT128_ARRAY) immutable(decimal_t)[] float128_array;
+    static if ( NATIVE ) {
+        @Type(Type.NATIVE_HIBON_ARRAY)    HiBON[]     native_hibon_array;
+        @Type(Type.NATIVE_DOCUMENT_ARRAY) Document[]  native_document_array;
+        @Type(Type.NATIVE_STRING_ARRAY) string[]    native_string_array;
+        //  @Type(Type.NONE) alias NativeValueDataTypes = AliasSeq!(HiBON, HiBON[], Document[]);
 
-    @Type(Type.NONE) protected template GetFunctions(string text, bool first, TList...) {
+    }
+    // else {
+        alias NativeValueDataTypes = AliasSeq!();
+    // }
+    protected template GetFunctions(string text, bool first, TList...) {
         static if ( TList.length is 0 ) {
             enum GetFunctions=text~"else {\n    static assert(0, format(\"Not support illegal %s \", type )); \n}";
         }
         else {
             enum name=TList[0];
-            enum member_code="alias member=Value."~name~";";
+            enum member_code="alias member=ValueT."~name~";";
             mixin(member_code);
-            enum MemberType=getUDAs!(member, Type)[0];
-            alias MemberT=typeof(member);
-            static if ( (MemberType is Type.NONE) || ( !NATIVE && isOneOf!(MemberT, NativeValueDataTypes)) ) {
-                enum code="";
+            // pragma(msg, member_code, __traits(compiles, typeof(member)));
+
+            static if (  __traits(compiles, typeof(member)) && hasUDA!(member, Type) ) {
+
+            //alias member = mixin("Value."~name);
+                enum MemberType=getUDAs!(member, Type)[0];
+                alias MemberT=typeof(member);
+                static if ( (MemberType is Type.NONE) || ( !NATIVE && isOneOf!(MemberT, NativeValueDataTypes)) ) {
+                    enum code="";
+                }
+                else {
+                    enum code = format("%sstatic if ( type is Type.%s ) {\n    return %s;\n}\n",
+                        (first)?"":"else ", MemberType, name);
+                }
+                enum GetFunctions=GetFunctions!(text~code, false, TList[1..$]);
             }
             else {
-                enum code = format("%sstatic if ( type is Type.%s ) {\n    return %s;\n}\n",
-                    (first)?"":"else ", MemberType, name);
+                enum GetFunctions=GetFunctions!(text, false, TList[1..$]);
             }
-            enum GetFunctions=GetFunctions!(text~code, false, TList[1..$]);
         }
+
     }
 
-    @Type(Type.NONE) auto get(alias type)() {
-        enum code=GetFunctions!("", true, __traits(allMembers, Value));
+    @trusted
+    auto get(Type type)() pure const {
+        enum code=GetFunctions!("", true, __traits(allMembers, ValueT));
+//        pragma(msg, code);
         mixin(code);
         assert(0);
     }
 
-    @Type(Type.NONE) void opAssign(T)(T x) if (isOneOf!(T, typeof(this.tupleof))) {
+
+    protected template GetType(T, TList...) {
+        static if (TList.length is 0) {
+            enum GetType = Type.NONE;
+        }
+        else {
+            enum name = TList[0];
+            enum member_code = "alias member=ValueT."~name~";";
+            mixin(member_code);
+            static if ( __traits(compiles, typeof(member)) && hasUDA!(member, Type) ) {
+                enum MemberType=getUDAs!(member, Type)[0];
+                alias MemberT=typeof(member);
+                static if ( is(T == MemberT) ) {
+                    pragma(msg, ":", MemberType.stringof, " ", MemberT, " ", typeof(MemberType));
+                    enum GetType = MemberType;
+                }
+                else {
+                    enum GetType = GetType!(T, TList[1..$]);
+                }
+            }
+            else {
+                enum GetType = GetType!(T, TList[1..$]);
+            }
+        }
+    }
+
+    enum asType(T) = GetType!(T, __traits(allMembers, ValueT));
+    enum hasType(T) = asType!T !is Type.NONE;
+
+    version(none)
+    static unittest {
+        static assert(hasType!int);
+    }
+
+    this(T)(T x) {
         pragma(msg, typeof(this.tupleof));
-        static foreach(m; __traits(allMembers, Value) ) {
+        pragma(msg, "*** ", T, " * ", isOneOf!(T, typeof(this.tupleof)));
+//        static assert(isOneOf!(T,
+    }
+
+    @trusted
+    void opAssign(T)(T x) if (isOneOf!(T, typeof(this.tupleof))) {
+        static foreach(m; __traits(allMembers, ValueT) ) {
             static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
-                enum code="alias member=Value."~m~";";
+                enum code="alias member=ValueT."~m~";";
                 mixin(code);
                 enum MemberType=getUDAs!(member, Type)[0];
                 static assert ( MemberType !is Type.NONE, format("%s is not supported", T ) );
-                __traits(getMember, this, m) = x;
+                static if ( is(T == struct) && !__traits(compiles, __traits(getMember, this, m) = x) ) {
+                    pragma(msg, "T-> ", T, " : ", typeof(__traits(getMember, this, m)));
+                    x.copy(&__traits(getMember, this, m));
+//                    __traits(getMember, this, m) = T(x);
+                }
+                else {
+                    __traits(getMember, this, m) = x;
+                }
             }
+        }
+    }
+
+    alias type(Type aType) = typeof(get!aType());
+
+    uint size(Type E)() const pure nothrow {
+        alias T = type!E;
+//        static assert(!isOneOf(T, NativeType), format("Type of %s is not defined", T.stringof));
+        // static if ( isValueBasicType!T ) {
+        //     return T.sizeof;
+        // }
+        // else
+        // static if ( aType is Type.UTC ) {
+        //     return T.sizeof;
+        // }
+        // else
+        pragma(msg, format("Type %s %s is %s", T.stringof, E, isBasicValueType!(T).stringof));
+//        pragma(msg, format("Type %s %s is", T.stringof, aType, isBasicType!T));
+//        pragma(msg, format("Type %s %s is %s", T, aType, isBasicType!T));
+//        pragma(msg, format("Type %s", T.stringof));
+        static if ( isBasicValueType!T ) {
+            return T.sizeof;
+        }
+        // else static if ( isSomeString!T ) {
+        //     return text.length;
+        // }
+        else static if ( is(T: U[], U) && isBasicValueType!U ) {
+            return cast(uint)(get!(E).length * U.sizeof);
+        }
+        else {
+            static assert(0, format("Type %s of %s is not defined", E, T.stringof));
         }
     }
 
@@ -134,7 +241,7 @@ union Value(bool NATIVE=false, TDOC=HiBON) {
 
 unittest {
     import std.stdio;
-    Value!(false, HiBON) value;
+    ValueT!(false, void, void) value;
     value.int32=10;
     auto x=value.get!(Type.INT32);
     value.float32=13.45;
@@ -169,7 +276,7 @@ template ValueSeqBase(T, Members...) {
 }
 
 //alias ValueSeq(T, H) = ValueSeq!(T, __traits(allMembers, T));
-alias ValueSeq(V) = ValueSeqBase!(V, __traits(allMembers, V));
+//alias ValueSeq(V) = ValueSeqBase!(V, __traits(allMembers, V));
 
 template ValueTypeBase(Type type, Seq...) {
 //    static assert(Seg.length == 0, format("Type %s not supported", type));
@@ -215,9 +322,9 @@ template ValueSeqFilterBase(alias pred, Seq...) {
 // HBSON DType sequency Filter
 alias ValueSeqFilter(VSeq, alias pred)=ValueSeqFilterBase!(pred, VSeq);
 
-enum isValueBasicType(TList...) = isBasicType!(TList[0]) && (TList[1] !is Type.UTC);
+enum CheckValueBasicType(TList...) = isBasicType!(TList[0]) && (TList[1] !is Type.UTC);
 
-alias ValueSeqBasicTypes(VSeq)=ValueSeqFilter!(VSeq, isValueBasicType);
+alias ValueSeqBasicTypes(VSeq)=ValueSeqFilter!(VSeq, CheckValueBasicType);
 
 template isValueBinaryType(T) {
     static if ( is(T:immutable(decimal_t)[]) ) {
@@ -233,13 +340,13 @@ template isValueBinaryType(T) {
 
 alias ValueSeqBinaryTypes(V)=ValueSeqFilter!(V, isValueBinaryType);
 
-enum isValueIntegralType(TList...) = isIntegral!(TList[0]) && (TList[1] !is Type.UTC);
+enum CheckValueIntegralType(TList...) = isIntegral!(TList[0]) && (TList[1] !is Type.UTC);
 
-alias ValueSeqIntegralTypes(V) = ValueSeqFilter!(V, isValueIntegralType);
+alias ValueSeqIntegralTypes(V) = ValueSeqFilter!(V, CheckValueIntegralType);
 
-enum isValueNumericType(TList...) = isNumeric!(TList[0]) && (TList[1] !is Type.UTC);
+enum CheckValueNumericType(TList...) = isNumeric!(TList[0]) && (TList[1] !is Type.UTC);
 
-alias ValueSeqNumericTypes(V) = ValueSeqFilter!(V, isValueNumericType);
+alias ValueSeqNumericTypes(V) = ValueSeqFilter!(V, CheckValueNumericType);
 
 template DTypes(Seq...) {
     static if ( Seq.length == 0 ) {
@@ -265,7 +372,7 @@ template HiBONTypes(Seq...) {
 
 //enum  TypeName(T, VSeq...) = VSeq[staticIndexOf!(T, VSeq)+2];
 
-alias NativeValueDataTypes = AliasSeq!(HiBON, HiBON[], Document[]);
+//alias NativeValueDataTypes = AliasSeq!(HiBON, HiBON[], Document[]);
 
 @safe bool is_index(string a, out uint result) pure {
     import std.conv : to;

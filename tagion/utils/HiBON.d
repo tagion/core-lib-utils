@@ -16,6 +16,10 @@ import std.datetime;   // Date, DateTime
 import std.container : RedBlackTree;
 import std.format;
 import std.meta : staticIndexOf;
+import std.algorithm.iteration : map, fold, each;
+import std.traits : EnumMembers, ForeachType, Unqual, isMutable, isBasicType;
+import std.bitmanip : write;
+
 
 import tagion.utils.Document;
 import tagion.utils.HiBONBase;
@@ -65,15 +69,38 @@ ubyte[] fromHex(in string hex) pure nothrow {
 //
 // HiBON Array
 //
-//alias HBSAN=HiBON!(true);
+//alias HiLIST = HiBON!true;
+version(none)
+@safe struct HiList {
+    immutable uint size;
+    this(const(Document[]) docs) {
+
+    }
+}
+
+@safe
+void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(T : U[], U) && isBasicType!U ) {
+    const ubytes = cast(const(ubyte[]))array;
+    immutable new_index = index + ubytes.length;
+    scope(success) {
+        index = new_index;
+    }
+    buffer[index..new_index] = ubytes;
+}
 
 @safe class HiBON {
-    alias ValueT=Value!(true, HiBON);
-    alias ValueSeq = .ValueSeq!(ValueT);
+    enum ubyte LIST_KEY=0; // A key length of zero means that it is a list member/element
 
-    alias TypeEnum(T) = ValueSeq[staticIndexOf!(T, ValueSeq)+1];
+    alias Value=ValueT!(true, HiBON, Document);
 
-    enum  TypeName(T) = ValueSeq[staticIndexOf!(T, ValueSeq)+2];
+//    alias ValueT=Value!(true, HiBON, char);
+    //alias ValueSeq = .ValueSeq!(ValueT);
+
+//    alias TypeEnum(T) = ValueSeq[staticIndexOf!(T, ValueSeq)+1];
+
+    //  enum  TypeName(T) = ValueSeq[staticIndexOf!(T, ValueSeq)+2];
+
+    enum isList(Type E) = (E is Type.NATIVE_HIBON_ARRAY) || (E is Type.NATIVE_DOCUMENT_ARRAY) || (E is Type.NATIVE_STRING_ARRAY);
 
     version(none)
     static string TypeString(T)() {
@@ -98,20 +125,222 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
     }
 
-    struct Member {
+    protected void append(ref ubyte[] buffer, ref size_t index) const {
+        _members[].each!( a => a.append(buffer, index) ); //.fold!( (a, b) => (a + b) );
+    }
+
+    @safe static class Member {
         string key;
         Type type;
-        ValueT value;
+        Value value;
+
+        protected this() nothrow {
+            // empty
+        }
+
+        this(T)(T x, string key = key.init) { //const if ( is(T == const) ) {
+            pragma(msg, "const(Member).this ", typeof(this), " : ", is(T == const), ", ", is(T == class) );
+
+            this.value = x;
+            this.type  = Value.asType!T;
+            this.key  = key;
+        }
+
+
+/*
+        void test() {
+            auto x=new Member();
+        }
+        */
+/*
+        this(T)(T x, string key = key.init)  if ( isMutable!T) {
+            pragma(msg, "Member.this ", typeof(this), " : ", is(T == const), ", ", is(T == class) );
+
+            this.value = x;
+            this.type  = Value.asType!T;
+            this.key  = key;
+        }
+*/
+
+/*
+        @trusted
+        static const(Member) opCall(T)(T x, string key = key.init) if ( is(T == const) ) {
+            auto result = new Member();
+            alias MutableT = Unqual!T;
+            pragma(msg, Value.asType!T, " : ", MutableT);
+            result.type  = Value.asType!T;
+            result.value = cast(MutableT)x;
+            result.key   = key;
+            return result;
+        }
+
+        static Member opCall(T)(T x, string key = key.init) if ( isMutable!T ) {
+            pragma(msg, "ctor ", T);
+            Member result;
+            //          auto result = new Member();
+//            alias MutableT = Unqual!T;
+//            pragma(msg, Value.asType!T, " : ", MutableT);
+            result.type  = Value.asType!T;
+            result.value = x;
+            result.key   = key;
+            return result;
+        }
+*/
+
+/*
+        static Member search(string key) nothrow {
+            auto result =new Member();
+            result.key = key;
+            return result;
+        }
+*/
+        @trusted
+        inout(HiBON) document() inout pure
+            in {
+                assert(type is Type.DOCUMENT);
+            }
+        do {
+            return value.document;
+        }
+
+        static Member search(string key) {
+            auto result=new Member();
+            result.key = key;
+            return result;
+        }
+
+        @trusted
+        size_t size() const pure {
+            with(Type) final switch(type) {
+                    foreach(E; EnumMembers!Type) {
+                    case E:
+                        static if ( (E is Type.NONE) || (E is Type.DEFINED_ARRAY) ) {
+                            assert(0, format("This type can not be expanded because %s is not a valid type propery", E));
+                        }
+                        else static if ( E is Type.DOCUMENT ) {
+                            return value.document.size;
+                        }
+                        else static if ( E is LIST ) {
+                            assert(0, "Not implemented yet");
+                        }
+                        else static if ( E is NATIVE_DOCUMENT ) {
+                            assert(0, "Uncomment next line");
+                            //return value.native_document.data.length;
+                        }
+                        else static if ( E is NATIVE_HIBON_ARRAY ) {
+                            return value.native_hibon_array.map!(a => a.size+uint.sizeof).fold!( (a, b) => a + b );
+                        }
+                        else static if ( E is NATIVE_DOCUMENT_ARRAY ) {
+                            assert(0, "Uncomment next line");
+//                            return value.native_document_array.map!(a => a.data.length+uint.sizeof).fold!( (a, b) => a + b );
+                        }
+                        else static if ( E is NATIVE_STRING_ARRAY ) {
+                            auto x = value.native_string_array.map!(a => a.length+uint.sizeof);
+                            return value.native_string_array.map!(a => a.length+uint.sizeof).fold!( (a, b) => a + b );
+                        }
+                        else {
+                            return cast(uint)(uint.sizeof + Type.sizeof + key.length + value.size!E);
+                        }
+                    }
+                    break;
+                }
+        }
+
+        protected void appendList(Type E)(ref ubyte[] buffer, ref size_t index) const if ( isList!E ) {
+            alias U=ForeachType!(Value.type!E);
+            pragma(msg, E, " ", U);
+            foreach(h; value.get!E) {
+                pragma(msg, ":-> ", typeof(h));
+                const m= new const(Member)(h);
+                m.append(buffer, index);
+            }
+        }
+
+        void append(ref ubyte[] buffer, ref size_t index) const {
+
+            // uint local_size;
+            immutable where_to_put_size = index;
+            buffer.write(uint.init, &index);
+            scope(success) {
+                immutable local_size = cast(uint)(index - where_to_put_size - uint.sizeof);
+                buffer.write(local_size, where_to_put_size);
+            }
+            with(Type) final switch(type) {
+                    foreach(E; EnumMembers!Type) {
+                    case E:
+                        static if ( (E is NONE) || (E is DEFINED_ARRAY)
+                            ) {
+                            assert(0, format("This type can not be expanded because %s is not a valid type propery", E));
+                        }
+                        else {
+                        // Write local as a place holder
+                        immutable index_to_put_type = buffer.length;
+                        buffer.write(type, &index);
+                        buffer.write(cast(ubyte)(key.length), &index);
+                        // ubyte[] xxx=[1,2,3,4];
+                        // buffer[index
+//                        buffer.write(xxx, &index);
+
+                        buffer.array_write(key, index);
+                        //local_size = cast(uint)(Type.sizeof + ubyte.sizeof + key.length);
+
+                        static if ( E is Type.DOCUMENT ) {
+                            document.append(buffer, index);
+                        }
+                        else static if ( E is LIST ) {
+                            assert(0, "Not implemented yet");
+                        }
+                        else static if ( E is NATIVE_DOCUMENT ) {
+                            buffer[index_to_put_type] = DOCUMENT;
+                            assert(0, "Uncomment next line");
+//                            buffer.array_write(native_document.data, index);
+                        }
+                        else static if ( isList!E ) {
+                            buffer[index_to_put_type] = LIST;
+                            appendList!E(buffer, index);
+                        }
+                        else {
+//                            local_size += value.size!E;
+                            alias T = Value.type!E;
+
+                            static if ( E is STRING ) {
+                                buffer.array_write(value.get!E, index);
+                            }
+                            else static if ( is(T : U[], U) && isBasicType!U ) {
+                                buffer.array_write(value.get!E, index);
+
+                            /*
+                            else static if ( E is DECIMAL ) {
+                                assert(0, format("%s is not supported yet", E));
+//                                buffer.array_write(value.get!(E).dummy, index);
+                            }
+                            */
+                            }
+                            else static if ( isBasicType!T ) {
+                                buffer.write(value.get!E, &index);
+                            }
+                        }
+                        }
+                    }
+                    break;
+                }
+            //return local_size;
+        }
     }
 
     alias Members=RedBlackTree!(Member, (a, b) => (less_than(a.key, b.key)));
     protected Members _members;
 
+    size_t size() const pure {
+        return 12;
+//        return _members[].map!(a => a.size).fold!( (a, b) => a + b);
+    }
+
+
     void check_type(DTYPE)(string file = __FILE__, size_t line = __LINE__ ){
         enum type_to_be_check=DtoHiBONType!DTYPE;
         static if ( is(typeof(type_to_be_check) == BinarySubType ) ) {
             .check(_type == Type.BINARY, format("Bad type %s expected %s", Type.BINARY, _type), file, line);
-//            check(_subtype == Type.BINARY, format("Bad type %s expected %s", Type.BINARY, _type), file, line);
             .check(_subtype == type_to_be_check, format("Bad sub-type %s expected %s", type_to_be_check, _subtype), file, line);
 
         }
@@ -122,19 +351,29 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
     void opIndexAssign(T)(T x, in string key) {
         .check(is_key_valid(key), format("Key is not a valid format '%s'", key));
-        ValueT value;
+        Value value;
         value=x;
-        Member new_member={key : key, type : TypeEnum!T, value};
+        Member new_member={key : key, type : Value.asType!T, value : value};
         _members.insert(new_member);
     }
 
-    inout(ValueT) opIndex(in string key) inout {
-        Member search_member={key : key};
-        auto range=_member.rbt.equalRange(search_member);
+    const(Value) opIndex(in string key) const {
+//    const(int) opIndex(in string key) const {
+        // Member search_member={key : key};
+        auto range=_members.equalRange(Member.search(key));
         .check(range.empty, format("Member '%s' does not exist", key) );
         return range.front.value;
     }
 
+    Value opIndex(in string key) {
+//    int opIndex(in string key) {
+//        immutable Member search_member={key : key};
+        auto range=_members.equalRange(Member.search(key)); //Member.search(key));
+        .check(range.empty, format("Member '%s' does not exist", key) );
+        return range.front.value;
+    }
+
+    version(none)
     unittest {
         auto hibon=new HiBON;
         hibon["int"]=10;
@@ -157,10 +396,17 @@ ubyte[] fromHex(in string hex) pure nothrow {
         assert(0);
     }
 
-    version(none)
-    bool isDocument() {
-        return (type == Type.DOCUMENT);
+    version(none) {
+
+    bool isDocument() const {
+        return (type is Type.DOCUMENT);
     }
+
+    bool isArray() const {
+        return (type is Type.LIST);
+    }
+    }
+
 
     void append(T)(string key, T x) {
         alias BaseT=TypedefType!T;
