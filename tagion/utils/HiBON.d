@@ -136,8 +136,21 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             // empty
         }
 
-        this(T)(T x, TKey key = key.init) { //const if ( is(T == const) ) {
+        this(T)(T x, TKey key = key.init) if ( !is(T == const) ) { //const if ( is(T == const) ) {
             this.value = x;
+            this.type  = Value.asType!T;
+            this.key  = key;
+        }
+
+        @trusted
+        this(T)(T x, TKey key = key.init) const if ( is(T == const) ) { //const if ( is(T == const) ) {
+            static if ( is(T == class) ) {
+                alias MutableT = Unqual!T;
+                this.value = cast(MutableT)x;
+            }
+            else {
+                this.value = x;
+            }
             this.type  = Value.asType!T;
             this.key  = key;
         }

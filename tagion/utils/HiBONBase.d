@@ -7,7 +7,7 @@ import tagion.TagionExceptions : Check, TagionException;
 
 import std.format;
 import std.meta : AliasSeq; //, Filter;
-import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, isType, getUDAs, hasUDA;
+import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, isType, Unqual, getUDAs, hasUDA;
 
 /**
  * Exception type used by tagion.utils.BSON module
@@ -117,11 +117,7 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
             enum name=TList[0];
             enum member_code="alias member=ValueT."~name~";";
             mixin(member_code);
-            // pragma(msg, member_code, __traits(compiles, typeof(member)));
-
             static if (  __traits(compiles, typeof(member)) && hasUDA!(member, Type) ) {
-
-            //alias member = mixin("Value."~name);
                 enum MemberType=getUDAs!(member, Type)[0];
                 alias MemberT=typeof(member);
                 static if ( (MemberType is Type.NONE) || ( !NATIVE && isOneOf!(MemberT, NativeValueDataTypes)) ) {
@@ -161,7 +157,6 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
                 enum MemberType=getUDAs!(member, Type)[0];
                 alias MemberT=typeof(member);
                 static if ( is(T == MemberT) ) {
-                    pragma(msg, ":", MemberType.stringof, " ", MemberT, " ", typeof(MemberType));
                     enum GetType = MemberType;
                 }
                 else {
@@ -182,10 +177,24 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
         static assert(hasType!int);
     }
 
-    this(T)(T x) {
+    @trusted
+    this(T)(T x) if (isOneOf!(Unqual!T, typeof(this.tupleof)) ) {
         pragma(msg, typeof(this.tupleof));
         pragma(msg, "*** ", T, " * ", isOneOf!(T, typeof(this.tupleof)));
-//        static assert(isOneOf!(T,
+        static foreach(m; __traits(allMembers, ValueT) ) {
+            static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
+            enum code=format("alias member=ValueT.%s;", m);
+            mixin(code);
+            static if ( hasUDA!(member, Type ) ) {
+                alias MemberT   = typeof(member);
+                static if ( is(T == MemberT) ) {
+                    __traits(getMember, this, m) = x;
+                    return;
+                }
+            }
+        }
+        }
+        assert (0, format("%s is not supported", T.stringof ) );
     }
 
     @trusted
