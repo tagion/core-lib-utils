@@ -403,7 +403,8 @@ body {
             BACK_QUOTE = 0x60
             }
     if ( a.length > 0 ) {
-        if ( (a[0] > '0') && (a[0] <= '0') ) {
+        if ( (a[0] > '0') && (a[0] <= '9') ) {
+            // Key can not start with at decimal number except for '0'
             return false;
         }
         foreach(c; a) {
