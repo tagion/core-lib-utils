@@ -137,61 +137,12 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
         }
 
         this(T)(T x, TKey key = key.init) { //const if ( is(T == const) ) {
-            pragma(msg, "const(Member).this ", typeof(this), " : ", is(T == const), ", ", is(T == class) );
-
             this.value = x;
             this.type  = Value.asType!T;
             this.key  = key;
         }
 
 
-/*
-        void test() {
-            auto x=new Member();
-        }
-        */
-/*
-        this(T)(T x, string key = key.init)  if ( isMutable!T) {
-            pragma(msg, "Member.this ", typeof(this), " : ", is(T == const), ", ", is(T == class) );
-
-            this.value = x;
-            this.type  = Value.asType!T;
-            this.key  = key;
-        }
-*/
-
-/*
-        @trusted
-        static const(Member) opCall(T)(T x, string key = key.init) if ( is(T == const) ) {
-            auto result = new Member();
-            alias MutableT = Unqual!T;
-            pragma(msg, Value.asType!T, " : ", MutableT);
-            result.type  = Value.asType!T;
-            result.value = cast(MutableT)x;
-            result.key   = key;
-            return result;
-        }
-
-        static Member opCall(T)(T x, string key = key.init) if ( isMutable!T ) {
-            pragma(msg, "ctor ", T);
-            Member result;
-            //          auto result = new Member();
-//            alias MutableT = Unqual!T;
-//            pragma(msg, Value.asType!T, " : ", MutableT);
-            result.type  = Value.asType!T;
-            result.value = x;
-            result.key   = key;
-            return result;
-        }
-*/
-
-/*
-        static Member search(string key) nothrow {
-            auto result =new Member();
-            result.key = key;
-            return result;
-        }
-*/
         @trusted
         inout(HiBON) document() inout pure
             in {
@@ -251,9 +202,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
 
         protected void appendList(Type E)(ref ubyte[] buffer, ref size_t index) const if ( isList!E ) {
             alias U=ForeachType!(Value.type!E);
-            pragma(msg, E, " ", U);
             foreach(h; value.get!E) {
-                pragma(msg, ":-> ", typeof(h));
                 const m= new const(Member)(h);
                 m.append(buffer, index);
             }
@@ -281,7 +230,6 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
                         buffer.write(type, &index);
                         static if ( HiLIST ) {
                             buffer.write(ubyte.init, &index);
-                            pragma(msg, typeof(key), " :-> ", LIST);
                             buffer.write(key, &index);
                         }
                         else {
@@ -348,8 +296,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
     protected Members _members;
 
     size_t size() const pure {
-        return 12;
-//        return _members[].map!(a => a.size).fold!( (a, b) => a + b);
+        return _members[].map!(a => a.size).fold!( (a, b) => a + b);
     }
 
 
