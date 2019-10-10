@@ -220,25 +220,9 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
 
     uint size(Type E)() const pure nothrow {
         alias T = type!E;
-//        static assert(!isOneOf(T, NativeType), format("Type of %s is not defined", T.stringof));
-        // static if ( isValueBasicType!T ) {
-        //     return T.sizeof;
-        // }
-        // else
-        // static if ( aType is Type.UTC ) {
-        //     return T.sizeof;
-        // }
-        // else
-//        pragma(msg, format("Type %s %s is %s", T.stringof, E, isBasicValueType!(T).stringof));
-//        pragma(msg, format("Type %s %s is", T.stringof, aType, isBasicType!T));
-//        pragma(msg, format("Type %s %s is %s", T, aType, isBasicType!T));
-//        pragma(msg, format("Type %s", T.stringof));
         static if ( isBasicValueType!T ) {
             return T.sizeof;
         }
-        // else static if ( isSomeString!T ) {
-        //     return text.length;
-        // }
         else static if ( is(T: U[], U) && isBasicValueType!U ) {
             return cast(uint)(get!(E).length * U.sizeof);
         }
@@ -285,9 +269,6 @@ template ValueSeqBase(T, Members...) {
         alias ValueSeqBase=AliasSeq!(MemberSeq, ValueSeqBase!(T, Members[1..$]));
     }
 }
-
-//alias ValueSeq(T, H) = ValueSeq!(T, __traits(allMembers, T));
-//alias ValueSeq(V) = ValueSeqBase!(V, __traits(allMembers, V));
 
 template ValueTypeBase(Type type, Seq...) {
 //    static assert(Seg.length == 0, format("Type %s not supported", type));
@@ -378,13 +359,6 @@ template HiBONTypes(Seq...) {
     }
 }
 
-
-//alias TypeEnum(T, VSeg...) = VSeq[staticIndexOf!(T, VSeq)+1];
-
-//enum  TypeName(T, VSeq...) = VSeq[staticIndexOf!(T, VSeq)+2];
-
-//alias NativeValueDataTypes = AliasSeq!(HiBON, HiBON[], Document[]);
-
 @safe bool is_index(string a, out uint result) pure {
     import std.conv : to;
     enum MAX_UINT_SIZE=to!string(uint.max).length;
@@ -429,6 +403,9 @@ body {
             BACK_QUOTE = 0x60
             }
     if ( a.length > 0 ) {
+        if ( (a[0] > '0') && (a[0] <= '0') ) {
+            return false;
+        }
         foreach(c; a) {
             // Chars between SPACE and DEL is valid
             // except for " ' ` is not valid

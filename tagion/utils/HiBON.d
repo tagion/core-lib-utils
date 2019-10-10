@@ -334,16 +334,12 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
     }
 
     const(Value) opIndex(in TKey key) const {
-//    const(int) opIndex(in string key) const {
-        // Member search_member={key : key};
         auto range=_members.equalRange(Member.search(key));
         .check(range.empty, format("Member '%s' does not exist", key) );
         return range.front.value;
     }
 
     Value opIndex(in TKey key) {
-//    int opIndex(in string key) {
-//        immutable Member search_member={key : key};
         auto range=_members.equalRange(Member.search(key)); //Member.search(key));
         .check(range.empty, format("Member '%s' does not exist", key) );
         return range.front.value;
