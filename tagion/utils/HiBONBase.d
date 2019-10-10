@@ -179,10 +179,9 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
 
     @trusted
     this(T)(T x) if (isOneOf!(Unqual!T, typeof(this.tupleof)) ) {
-        pragma(msg, typeof(this.tupleof));
-        pragma(msg, "*** ", T, " * ", isOneOf!(T, typeof(this.tupleof)));
+        alias MutableT = Unqual!T;
         static foreach(m; __traits(allMembers, ValueT) ) {
-            static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
+            static if ( is(typeof(__traits(getMember, this, m)) == MutableT ) ){
             enum code=format("alias member=ValueT.%s;", m);
             mixin(code);
             static if ( hasUDA!(member, Type ) ) {
@@ -206,7 +205,7 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
                 enum MemberType=getUDAs!(member, Type)[0];
                 static assert ( MemberType !is Type.NONE, format("%s is not supported", T ) );
                 static if ( is(T == struct) && !__traits(compiles, __traits(getMember, this, m) = x) ) {
-                    pragma(msg, "T-> ", T, " : ", typeof(__traits(getMember, this, m)));
+//                    pragma(msg, "T-> ", T, " : ", typeof(__traits(getMember, this, m)));
                     x.copy(&__traits(getMember, this, m));
 //                    __traits(getMember, this, m) = T(x);
                 }
@@ -230,7 +229,7 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
         //     return T.sizeof;
         // }
         // else
-        pragma(msg, format("Type %s %s is %s", T.stringof, E, isBasicValueType!(T).stringof));
+//        pragma(msg, format("Type %s %s is %s", T.stringof, E, isBasicValueType!(T).stringof));
 //        pragma(msg, format("Type %s %s is", T.stringof, aType, isBasicType!T));
 //        pragma(msg, format("Type %s %s is %s", T, aType, isBasicType!T));
 //        pragma(msg, format("Type %s", T.stringof));
