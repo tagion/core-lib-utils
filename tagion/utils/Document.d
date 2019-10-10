@@ -39,7 +39,7 @@ static assert(uint.sizeof == 4);
 
 
 @safe struct Document {
-    protected alias Value=ValueT!(false, void, Document);
+    protected alias Value=ValueT!(false, void, void, Document);
     // alias ValueSeq = .ValueSeq!(Value);
     // alias ValueType(Type type) = .ValueType!(type, ValueSeq);
     // pragma(msg, ValueSeq);

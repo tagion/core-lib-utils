@@ -69,7 +69,7 @@ enum Type : ubyte {
 enum isBasicValueType(T) = isBasicType!T || is(T : decimal_t);
 
 @safe
-union ValueT(bool NATIVE=false, HiBON,  Document) {
+union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
     @Type(Type.FLOAT32)   float     float32;
     @Type(Type.FLOAT64)   double    float64;
     // @Type(Type.FLOAT128)  decimal_t float128;
@@ -78,6 +78,9 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     //  @Type(Type.LIST)
     static if ( !is(HiBON == void ) ) {
         @Type(Type.DOCUMENT)  HiBON      document;
+    }
+    static if ( !is(HiList == void ) ) {
+        @Type(Type.LIST)  HiList    list;
     }
     @Type(Type.UTC)       ulong     date;
     @Type(Type.INT32)     int       int32;
@@ -241,7 +244,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
 
 unittest {
     import std.stdio;
-    ValueT!(false, void, void) value;
+    ValueT!(false, void, void, void) value;
     value.int32=10;
     auto x=value.get!(Type.INT32);
     value.float32=13.45;

@@ -69,15 +69,8 @@ ubyte[] fromHex(in string hex) pure nothrow {
 //
 // HiBON Array
 //
-//alias HiLIST = HiBON!true;
-version(none)
-@safe struct HiList {
-    immutable uint size;
-    this(const(Document[]) docs) {
-
-    }
-}
-
+alias HiBON = HiBONT!false;
+alias HiList = HiBONT!true;
 @safe
 void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(T : U[], U) && isBasicType!U ) {
     const ubytes = cast(const(ubyte[]))array;
@@ -88,11 +81,16 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
     buffer[index..new_index] = ubytes;
 }
 
-@safe class HiBON {
-    enum ubyte LIST_KEY=0; // A key length of zero means that it is a list member/element
+@safe class HiBONT(bool HiLIST) {
+//    enum ubyte LIST_KEY=0; // A key length of zero means that it is a list member/element
 
-    alias Value=ValueT!(true, HiBON, Document);
-
+    alias Value=ValueT!(true, HiBON, HiList, Document);
+    static if ( HiLIST ) {
+        alias TKey = uint;
+    }
+    else {
+        alias TKey = string;
+    }
 //    alias ValueT=Value!(true, HiBON, char);
     //alias ValueSeq = .ValueSeq!(ValueT);
 
@@ -130,7 +128,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
     }
 
     @safe static class Member {
-        string key;
+        TKey key;
         Type type;
         Value value;
 
@@ -138,7 +136,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             // empty
         }
 
-        this(T)(T x, string key = key.init) { //const if ( is(T == const) ) {
+        this(T)(T x, TKey key = key.init) { //const if ( is(T == const) ) {
             pragma(msg, "const(Member).this ", typeof(this), " : ", is(T == const), ", ", is(T == class) );
 
             this.value = x;
@@ -203,7 +201,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             return value.document;
         }
 
-        static Member search(string key) {
+        static Member search(TKey key) {
             auto result=new Member();
             result.key = key;
             return result;
@@ -239,7 +237,12 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
                             return value.native_string_array.map!(a => a.length+uint.sizeof).fold!( (a, b) => a + b );
                         }
                         else {
-                            return cast(uint)(uint.sizeof + Type.sizeof + key.length + value.size!E);
+                            static if ( HiLIST ) {
+                                return cast(uint)(uint.sizeof + Type.sizeof + key.sizeof + value.size!E);
+                            }
+                            else {
+                                return cast(uint)(uint.sizeof + Type.sizeof + key.length + value.size!E);
+                            }
                         }
                     }
                     break;
@@ -276,12 +279,19 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
                         // Write local as a place holder
                         immutable index_to_put_type = buffer.length;
                         buffer.write(type, &index);
-                        buffer.write(cast(ubyte)(key.length), &index);
+                        static if ( HiLIST ) {
+                            buffer.write(ubyte.init, &index);
+                            pragma(msg, typeof(key), " :-> ", LIST);
+                            buffer.write(key, &index);
+                        }
+                        else {
+                            buffer.write(cast(ubyte)(key.length), &index);
+                            buffer.array_write(key, index);
+                        }
                         // ubyte[] xxx=[1,2,3,4];
                         // buffer[index
 //                        buffer.write(xxx, &index);
 
-                        buffer.array_write(key, index);
                         //local_size = cast(uint)(Type.sizeof + ubyte.sizeof + key.length);
 
                         static if ( E is Type.DOCUMENT ) {
@@ -328,7 +338,13 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
         }
     }
 
-    alias Members=RedBlackTree!(Member, (a, b) => (less_than(a.key, b.key)));
+    static if ( HiLIST ) {
+        alias Members=RedBlackTree!(Member, (a, b) => (a.key < b.key));
+    }
+    else {
+        alias Members=RedBlackTree!(Member, (a, b) => (less_than(a.key, b.key)));
+    }
+
     protected Members _members;
 
     size_t size() const pure {
@@ -350,14 +366,14 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
     }
 
     void opIndexAssign(T)(T x, in string key) {
-        .check(is_key_valid(key), format("Key is not a valid format '%s'", key));
-        Value value;
-        value=x;
-        Member new_member={key : key, type : Value.asType!T, value : value};
+        static if (!HiLIST) {
+            .check(is_key_valid(key), format("Key is not a valid format '%s'", key));
+        }
+        Member new_member=new Member(x, key);
         _members.insert(new_member);
     }
 
-    const(Value) opIndex(in string key) const {
+    const(Value) opIndex(in TKey key) const {
 //    const(int) opIndex(in string key) const {
         // Member search_member={key : key};
         auto range=_members.equalRange(Member.search(key));
@@ -365,7 +381,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
         return range.front.value;
     }
 
-    Value opIndex(in string key) {
+    Value opIndex(in TKey key) {
 //    int opIndex(in string key) {
 //        immutable Member search_member={key : key};
         auto range=_members.equalRange(Member.search(key)); //Member.search(key));
