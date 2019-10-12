@@ -20,7 +20,8 @@ private import std.bitmanip;
 */
 import std.format;
 import std.meta : AliasSeq, Filter;
-import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs, EnumMembers;
+import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs, EnumMembers, Unqual;
+import std.conv : to, emplace;
 
 import tagion.Types : decimal_t;
 import tagion.Base : isOneOf;
@@ -95,10 +96,75 @@ static assert(uint.sizeof == 4);
     @trusted
     @property uint length() const {
         uint counter;
-        foreach(i; Range(data)) {
+        foreach(e; this[]) {
             counter++;
         }
         return counter;
+    }
+
+    alias ErrorCallback =void function(ref scope const(Element));
+
+    Element.ErrorCode valid(ErrorCallback error_callback =null) const {
+        foreach(ref e; this[]) {
+            Element.ErrorCode error_code;
+            if ( e.type is Type.DOCUMENT ) {
+                error_code = e.get!(Document).valid(error_callback);
+            }
+            else {
+                error_code = e.valid;
+            }
+            if ( error_code !is Element.ErrorCode.NONE ) {
+                if ( error_callback ) {
+                    error_callback(e);
+                }
+                return error_code;
+            }
+        }
+        return Element.ErrorCode.NONE;
+    }
+
+    void toJSON(T, string INDENT="  ", string EOL="\n", string SPACE=" ")(T stream, string indent=null) {
+        enum BETWEEN=","~EOL;
+        bool first=true;
+        void print(string key, string element_type, string element_text) {
+            stream.writef("%s%s%s:%s{%s", indent, key, SPACE, SPACE, EOL);
+            stream.writef("%s%s$type%s:%s%s%s", indent, INDENT, SPACE, SPACE, element_type, BETWEEN);
+            string text;
+            e.as(text);
+            stream.writef("%s%s$type%s:%s%s%s", indent, INDENT, SPACE, SPACE, element_text, EOL);
+            stream.writef("%s}", indent);
+        }
+        foreach(ref e; this[]) {
+            if ( !first ) {
+                stream.writef("%s", BETWEEN);
+            }
+            first = false;
+            if (e.type is Type.DOCUMENT) {
+                e.get!(Document).toJSON(stream);
+            }
+            else {
+            CaseType:
+                switch(e.type) {
+                    static foreach(E; EnumMembers!Type) {
+                        static if (isHiBONType!E) {
+                        case E:
+                            string text;
+                            e.as(text);
+                            alias BaseT = Value.TypeT!E;
+                            static if ( isNumeric!BaseT || is(Unqual!BaseT == bool) || isArray(E) ) {
+                                print(e.key, e.type.to!string, text);
+                            }
+                            else {
+                                print(e.key, e.type.to!string, '"'~text~'"');
+                            }
+                            break CaseType;
+                        }
+                    }
+                default:
+                    print(e.key, cast(ubyte)(e.type).to!string, format("\"Bad data type\""));
+                }
+            }
+        }
     }
 
     version(none)
@@ -201,8 +267,6 @@ static assert(uint.sizeof == 4);
          */
         @trusted
         void popFront() {
-            import std.conv;
-
             emplace!Element(&_element, data[_index..$]);
             _index += _element.size;
         }
@@ -395,13 +459,38 @@ public:
             assert(0);
         }
 
-        /*
-        const(T) get(T)() {
-            enum E = ValueT.asType!T;
+
+        T get(T)() {
+            enum E = Value.asType!T;
             .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
-            return
+            .check(E is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
+            return value.get!E;
         }
-        */
+
+        /**
+           Tryes to convert the value to the type T.
+           Returns true if the function succeeds
+         */
+        bool as(T)(ref T result) {
+            switch(type) {
+                static foreach(E; EnumMembers!Type) {
+                    static if (isHiBONType(E)) {
+                    case E:
+                        alias BaseT = Value.TypeT!E;
+                        static if (isImplicitlyConvertible!(BaseT, T)) {
+                            result=value.get!BaseT;
+                            return true;
+                        }
+                        else static if (__traits(compiles, value.get!(BaseT).to!T)) {
+                            result = value.get!(BaseT).to!T;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+
     }
 
     @property @safe const pure nothrow {
@@ -529,6 +618,26 @@ public:
                 }
                 return NONE;
             }
+        }
+
+        /**
+           Check if the type match That template.
+           That template must have one parameter T as followes
+           alias That(T) = ...;
+         */
+        bool isThat(alias That)() {
+            switch(type) {
+                static foreach(E; EnumMembers!Type) {
+                    static if (isHiBONType!E) {
+                    case E:
+                        alias T = Value.TypeT!E;
+                        return That!T;
+                    }
+                }
+            default:
+                // empty
+            }
+            return false;
         }
 
         version(none) {
@@ -706,6 +815,7 @@ public:
 
     }
 
+    version(none)
     @property @safe const {
         immutable(ubyte[]) value() {
             if (isEod) {
