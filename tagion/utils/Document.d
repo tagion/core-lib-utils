@@ -39,7 +39,7 @@ static assert(uint.sizeof == 4);
 
 
 @safe struct Document {
-    protected alias Value=ValueT!(false, void, void, Document);
+    protected alias Value=ValueT!(false, void, Document);
     // alias ValueSeq = .ValueSeq!(Value);
     // alias ValueType(Type type) = .ValueType!(type, ValueSeq);
     // pragma(msg, ValueSeq);
@@ -438,7 +438,7 @@ public:
         }
 
         @trusted
-        uint size() {
+        size_t size() {
             with(Type) switch(type) {
                 static foreach(E; EnumMembers!Type) {
                 case E:
@@ -447,7 +447,7 @@ public:
                         immutable byte_size = *cast(uint*)(_data[valuePos..document_pos].ptr);
                         return byte_size;
                     }
-                    else static if (E !is NONE) {
+                    else static if (isHiBONType(E)) {
                         alias T = Value.TypeT!E;
                         static if ( isArray(E) ) {
                             static if (isNative(E)) {
@@ -463,9 +463,7 @@ public:
                             return valuePos + T.sizeof;
                         }
                     }
-                    else {
-                        goto default;
-                    }
+                    goto default;
                 }
                 default:
                     // empty
@@ -486,6 +484,7 @@ public:
         /**
            Check if the element is valid
          */
+        @trusted
         ErrorCode valid() {
             with(ErrorCode) {
                 if ( type is Type.DOCUMENT ) {
@@ -494,16 +493,17 @@ public:
                 if ( _data.length < MIN_ELEMENT_SIZE ) {
                     return TOO_SMALL;
                 }
+            TypeCase:
                 switch(type) {
                     static foreach(E; EnumMembers!Type) {
                     case E:
                         static if ( (isNative(E) || (E is Type.TRUNC) || (E is Type.DEFINED_ARRAY) ) ) {
                             return ILLEGAL_TYPE;
                         }
-                        break;
-                    default:
-                        return INVALID_TYPE;
+                        break TypeCase;
                     }
+                default:
+                    return INVALID_TYPE;
                 }
                 if ( size < _data.length ) {
                     return OVERFLOW;
@@ -515,7 +515,7 @@ public:
                         static foreach(E; EnumMembers!Type) {
                             static if ( isArray(E) && !isNative(E) ) {
                             case E:
-                                alias T = ValueT.TypeT!E;
+                                alias T = Value.TypeT!E;
                                 static if ( is(T : U[], U) ) {
                                     if ( byte_size % U.sizeof !is 0 ) {
                                         return ARRAY_SIZE_BAD;
@@ -722,6 +722,7 @@ public:
     }
 
     //Binary buffer
+    version(none)
     @trusted protected immutable(ubyte[]) binary_buffer() const {
         immutable v=value;
         immutable len=*cast(uint*)(v.ptr);
@@ -967,6 +968,7 @@ public:
 
 
     // TODO: Add more BSON specified type accessors, e.g.  BINARY
+        version(none)
 
     @property @trusted const
     {

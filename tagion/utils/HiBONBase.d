@@ -7,13 +7,17 @@ import tagion.TagionExceptions : Check, TagionException;
 
 import std.format;
 import std.meta : AliasSeq; //, Filter;
-import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, isType, Unqual, getUDAs, hasUDA;
+import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, isType, EnumMembers, Unqual, getUDAs, hasUDA;
 
 import std.system : Endian;
 import bin = std.bitmanip;
 
 alias binread(T, R) = bin.read!(T, Endian.littleEndian, R);
-alias binwrite(T, R) = bin.write!(T, Endian.littleEndian, R);
+
+void binwrite(T, R, I)(R range, const T value, I index) {
+    bin.write!(T, Endian.littleEndian, R)(range, value, index);
+}
+//alias binwrite(T, R) = bin.write!(T, Endian.littleEndian, R);
 
 /**
  * Exception type used by tagion.utils.BSON module
@@ -34,7 +38,7 @@ enum Type : ubyte {
         FLOAT64         = 0x01,  /// Floating point
         STRING          = 0x02,  /// UTF8 STRING
         DOCUMENT        = 0x03,  /// Embedded document (Both Object and Documents)
-        LIST            = 0x04,  /// Array List
+        //    LIST            = 0x04,  /// Array List
         BOOLEAN         = 0x08,  /// Boolean - true or false
         UTC             = 0x09,  /// UTC datetime
         INT32           = 0x10,  /// 32-bit integer
@@ -51,7 +55,7 @@ enum Type : ubyte {
 
 
         DEFINED_NATIVE  = 0x40,
-        NATIVE_DOCUMENT = DEFINED_NATIVE | DOCUMENT, // This type is only used as an internal represention (Document type)
+        NATIVE_DOCUMENT = DEFINED_NATIVE | 0x3e, // This type is only used as an internal represention (Document type)
 
         DEFINED_ARRAY   = 0x80,  // Indicated an Intrinsic array types
         BINARY          = DEFINED_ARRAY | 0x05, // Binary data
@@ -73,7 +77,9 @@ enum Type : ubyte {
 
 @safe
 bool isNative(Type type) pure nothrow {
-    return ((type & Type.DEFINED_NATIVE) !is 0);
+    with(Type) {
+        return ((type & DEFINED_NATIVE) !is 0);
+    }
 }
 
 @safe
@@ -83,14 +89,41 @@ bool isArray(Type type) pure nothrow {
     }
 }
 
+@safe
+bool isHiBONType(Type type) pure nothrow {
+    with(Type) {
+        switch(type) {
+            static foreach(E; EnumMembers!Type) {
+            case E:
+                pragma(msg, "isHiBONType E=", E, " : ", isNative(E));
+                static if (isNative(E) || (E is TRUNC) || (E is NONE) || (E is DEFINED_ARRAY)) {
+                    return false;
+                }
+                else {
+                    return true;
+                }
+            }
+        default:
+            // empty
+        }
+    }
+    return false;
+}
 
-@safe class HiBON;
+/*
+static unittest {
+    with(Type) {
+        assert(isHiBON(
+}
+*/
+
+//@safe class HiBON;
 //@safe struct Document;
 
 enum isBasicValueType(T) = isBasicType!T || is(T : decimal_t);
 
 @safe
-union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
+union ValueT(bool NATIVE=false, HiBON,  Document) {
     @Type(Type.FLOAT32)   float     float32;
     @Type(Type.FLOAT64)   double    float64;
     // @Type(Type.FLOAT128)  decimal_t float128;
@@ -100,9 +133,9 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
     static if ( !is(HiBON == void ) ) {
         @Type(Type.DOCUMENT)  HiBON      document;
     }
-    static if ( !is(HiList == void ) ) {
-        @Type(Type.LIST)  HiList    list;
-    }
+    // static if ( !is(HiList == void ) ) {
+    //     @Type(Type.LIST)  HiList    list;
+    // }
     @Type(Type.UTC)       ulong     date;
     @Type(Type.INT32)     int       int32;
     @Type(Type.INT64)     long      int64;
@@ -240,15 +273,21 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
     alias TypeT(Type aType) = typeof(get!aType());
 
     uint size(Type E)() const pure nothrow {
-        alias T = type!E;
-        static if ( isBasicValueType!T ) {
-            return T.sizeof;
-        }
-        else static if ( is(T: U[], U) && isBasicValueType!U ) {
-            return cast(uint)(get!(E).length * U.sizeof);
+        pragma(msg, "Size ", E, " : ", isHiBONType(E));
+        static if (isHiBONType(E)) {
+            alias T = TypeT!E;
+            static if ( isBasicValueType!T ) {
+                return T.sizeof;
+            }
+            else static if ( is(T: U[], U) && isBasicValueType!U ) {
+                return cast(uint)(get!(E).length * U.sizeof);
+            }
+            else {
+                static assert(0, format("Type %s of %s is not defined", E, T.stringof));
+            }
         }
         else {
-            static assert(0, format("Type %s of %s is not defined", E, T.stringof));
+            static assert(0, format("Illegal type %s", E));
         }
     }
 
@@ -257,7 +296,7 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
 
 unittest {
     import std.stdio;
-    ValueT!(false, void, void, void) value;
+    ValueT!(false, void, void) value;
     value.int32=10;
     auto x=value.get!(Type.INT32);
     value.float32=13.45;
@@ -424,10 +463,10 @@ body {
             BACK_QUOTE = 0x60
             }
     if ( a.length > 0 ) {
-        if ( (a[0] > '0') && (a[0] <= '9') ) {
-            // Key can not start with at decimal number except for '0'
-            return false;
-        }
+        // if ( (a[0] > '0') && (a[0] <= '9') ) {
+        //     // Key can not start with at decimal number except for '0'
+        //     return false;
+        // }
         foreach(c; a) {
             // Chars between SPACE and DEL is valid
             // except for " ' ` is not valid

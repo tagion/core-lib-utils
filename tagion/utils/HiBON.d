@@ -84,7 +84,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
 @safe class HiBONT(bool HiLIST) {
 //    enum ubyte LIST_KEY=0; // A key length of zero means that it is a list member/element
 
-    alias Value=ValueT!(true, HiBON, HiList, Document);
+    alias Value=ValueT!(true, HiBON,  Document);
     static if ( HiLIST ) {
         alias TKey = uint;
     }
@@ -176,15 +176,15 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             with(Type) final switch(type) {
                     foreach(E; EnumMembers!Type) {
                     case E:
-                        static if ( (E is Type.NONE) || (E is Type.DEFINED_ARRAY) ) {
+                        static if ( !isHiBONType(E) ) {
                             assert(0, format("This type can not be expanded because %s is not a valid type propery", E));
                         }
                         else static if ( E is Type.DOCUMENT ) {
                             return value.document.size;
                         }
-                        else static if ( E is LIST ) {
-                            assert(0, "Not implemented yet");
-                        }
+                        // else static if ( E is LIST ) {
+                        //     assert(0, "Not implemented yet");
+                        // }
                         else static if ( E is NATIVE_DOCUMENT ) {
                             assert(0, "Uncomment next line");
                             //return value.native_document.data.length;
@@ -233,64 +233,63 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             with(Type) final switch(type) {
                     foreach(E; EnumMembers!Type) {
                     case E:
-                        static if ( (E is NONE) || (E is DEFINED_ARRAY)
-                            ) {
-                            assert(0, format("This type can not be expanded because %s is not a valid type propery", E));
-                        }
-                        else {
-                        // Write local as a place holder
-                        immutable index_to_put_type = buffer.length;
-                        buffer.binwrite(type, &index);
-                        static if ( HiLIST ) {
-                            buffer.binwrite(ubyte.init, &index);
-                            buffer.binwrite(key, &index);
-                        }
-                        else {
-                            buffer.binwrite(cast(ubyte)(key.length), &index);
-                            buffer.array_write(key, index);
-                        }
-                        // ubyte[] xxx=[1,2,3,4];
-                        // buffer[index
+                        static if ( isHiBONType(E)) {
+                            // Write local as a place holder
+                            immutable index_to_put_type = buffer.length;
+                            buffer.binwrite(type, &index);
+                            static if ( HiLIST ) {
+                                buffer.binwrite(ubyte.init, &index);
+                                buffer.binwrite(key, &index);
+                            }
+                            else {
+                                buffer.binwrite(cast(ubyte)(key.length), &index);
+                                buffer.array_write(key, index);
+                            }
+                            // ubyte[] xxx=[1,2,3,4];
+                            // buffer[index
 //                        buffer.binwrite(xxx, &index);
 
-                        //local_size = cast(uint)(Type.sizeof + ubyte.sizeof + key.length);
+                            //local_size = cast(uint)(Type.sizeof + ubyte.sizeof + key.length);
 
-                        static if ( E is Type.DOCUMENT ) {
-                            document.append(buffer, index);
-                        }
-                        else static if ( E is LIST ) {
-                            assert(0, "Not implemented yet");
-                        }
-                        else static if ( E is NATIVE_DOCUMENT ) {
-                            buffer[index_to_put_type] = DOCUMENT;
-                            assert(0, "Uncomment next line");
+                            static if ( E is Type.DOCUMENT ) {
+                                document.append(buffer, index);
+                            }
+                            // else static if ( E is LIST ) {
+                            //     assert(0, "Not implemented yet");
+                            // }
+                            else static if ( E is NATIVE_DOCUMENT ) {
+                                buffer[index_to_put_type] = DOCUMENT;
+                                assert(0, "Uncomment next line");
 //                            buffer.array_write(native_document.data, index);
-                        }
-                        else static if ( isList!E ) {
-                            buffer[index_to_put_type] = LIST;
-                            appendList!E(buffer, index);
+                            }
+                            else static if ( isList!E ) {
+                                buffer[index_to_put_type] = LIST;
+                                appendList!E(buffer, index);
+                            }
+                            else {
+//                            local_size += value.size!E;
+                                alias T = Value.TypeT!E;
+
+                                static if ( E is STRING ) {
+                                    buffer.array_write(value.get!E, index);
+                                }
+                                else static if ( is(T : U[], U) && isBasicType!U ) {
+                                    buffer.array_write(value.get!E, index);
+
+                                    /*
+                                      else static if ( E is DECIMAL ) {
+                                      assert(0, format("%s is not supported yet", E));
+//                                buffer.array_write(value.get!(E).dummy, index);
+}
+                                    */
+                                }
+                                else static if ( isBasicType!T ) {
+                                    buffer.binwrite(value.get!E, &index);
+                                }
+                            }
                         }
                         else {
-//                            local_size += value.size!E;
-                            alias T = Value.type!E;
-
-                            static if ( E is STRING ) {
-                                buffer.array_write(value.get!E, index);
-                            }
-                            else static if ( is(T : U[], U) && isBasicType!U ) {
-                                buffer.array_write(value.get!E, index);
-
-                            /*
-                            else static if ( E is DECIMAL ) {
-                                assert(0, format("%s is not supported yet", E));
-//                                buffer.array_write(value.get!(E).dummy, index);
-                            }
-                            */
-                            }
-                            else static if ( isBasicType!T ) {
-                                buffer.binwrite(value.get!E, &index);
-                            }
-                        }
+                            assert(0, format("This type can not be expanded because %s is not a valid type propery", E));
                         }
                     }
                     break;
@@ -370,13 +369,13 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
 
     version(none) {
 
-    bool isDocument() const {
-        return (type is Type.DOCUMENT);
-    }
+        bool isDocument() const {
+            return (type is Type.DOCUMENT);
+        }
 
-    bool isArray() const {
-        return (type is Type.LIST);
-    }
+        bool isArray() const {
+            return (type is Type.LIST);
+        }
     }
 
 
@@ -403,186 +402,186 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
     }
 
     /*
-    @trusted
-    protected void append(T)(Type type, string key, T x, BinarySubType binary_subtype=BinarySubType.GENERIC) {
-        alias BaseT=TypedefType!T;
-        alias UnqualT=Unqual!BaseT;
-        check(!hasElement(key), format("Member '%s' already exist", key));
-        bool result=false;
-        HiBON elm=new HiBON;
-        scope(success) {
-            elm._type=type;
-            elm._subtype=binary_subtype;
-            Member member={key : key, element : elm};
-            _member.insert(member);
-            // elm._key=key;
-            // elm.members=members;
-            // members=elm;
-        }
-        with (Type) {
-            final switch (type) {
-            case MIN:
-            case NONE:
-            case MAX:
-            case TRUNC:
-                break;
-            case HASHDOC:
-                assert(0, "Hashdoc not implemented yet");
-                break;
-            case DOUBLE:
-                elm.value.number=x;
-                result=true;
-                break
-            case FLOAT:
-                elm.value.number32=x;
-                result=true;
-                break;
-            case STRING:
-                elm.value.text=x;
-                result=true;
-                break;
-            case DOCUMENT:
-                static if (is(BaseT:HiBON)) {
-                    elm.value.document=x;
-                    result=true;
-                }
-                else static if (is(BaseT:const(HiBON))) {
-                    elm.value.document=cast(HiBON)x;
-                    result=true;
-                }
-                else {
-                    .check(0, "Unsupported type "~T.stringof~" not a valid "~to!string(type));
-                }
-                break;
-            case ARRAY:
-                static if (is(BaseT==HiBON)) {
-                    elm.value.document=x;
-                    result=true;
-                }
-                else static if (is(BaseT:const(HiBON))) {
-                    elm.value.document=cast(HiBON)x;
-                    result=true;
-                }
-                else static if (is(BaseT:U[],U) && !isSomeString!BaseT && !isSubType!BaseT && !is(U==struct) ) {
-                    auto hbson_array=new HiBON;
-                    foreach(i, ref b; x) {
-                        if ( b !is null ) {
-                            hbson_array[i]=b;
-                        }
-                    }
-                    elm.value.document=hbson_array;
-                    result=true;
-                }
-                else {
-                    assert(0, "Unsupported type "~T.stringof~" does not seem to be a valid native array");
-                }
+      @trusted
+      protected void append(T)(Type type, string key, T x, BinarySubType binary_subtype=BinarySubType.GENERIC) {
+      alias BaseT=TypedefType!T;
+      alias UnqualT=Unqual!BaseT;
+      check(!hasElement(key), format("Member '%s' already exist", key));
+      bool result=false;
+      HiBON elm=new HiBON;
+      scope(success) {
+      elm._type=type;
+      elm._subtype=binary_subtype;
+      Member member={key : key, element : elm};
+      _member.insert(member);
+      // elm._key=key;
+      // elm.members=members;
+      // members=elm;
+      }
+      with (Type) {
+      final switch (type) {
+      case MIN:
+      case NONE:
+      case MAX:
+      case TRUNC:
+      break;
+      case HASHDOC:
+      assert(0, "Hashdoc not implemented yet");
+      break;
+      case DOUBLE:
+      elm.value.number=x;
+      result=true;
+      break
+      case FLOAT:
+      elm.value.number32=x;
+      result=true;
+      break;
+      case STRING:
+      elm.value.text=x;
+      result=true;
+      break;
+      case DOCUMENT:
+      static if (is(BaseT:HiBON)) {
+      elm.value.document=x;
+      result=true;
+      }
+      else static if (is(BaseT:const(HiBON))) {
+      elm.value.document=cast(HiBON)x;
+      result=true;
+      }
+      else {
+      .check(0, "Unsupported type "~T.stringof~" not a valid "~to!string(type));
+      }
+      break;
+      case ARRAY:
+      static if (is(BaseT==HiBON)) {
+      elm.value.document=x;
+      result=true;
+      }
+      else static if (is(BaseT:const(HiBON))) {
+      elm.value.document=cast(HiBON)x;
+      result=true;
+      }
+      else static if (is(BaseT:U[],U) && !isSomeString!BaseT && !isSubType!BaseT && !is(U==struct) ) {
+      auto hbson_array=new HiBON;
+      foreach(i, ref b; x) {
+      if ( b !is null ) {
+      hbson_array[i]=b;
+      }
+      }
+      elm.value.document=hbson_array;
+      result=true;
+      }
+      else {
+      assert(0, "Unsupported type "~T.stringof~" does not seem to be a valid native array");
+      }
 
-                break;
-            case BINARY:
-                static if (is(BaseT:U[],U)) {
-                    alias UnqualU=Unqual!U;
-                    static if (is(UnqualU == immutable ubyte)) {
-                        elm.value.binary=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU == immutable int)) {
-                        elm.value.int32_array=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU == immutable uint)) {
-                        elm.value.uint32_array=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU == immutable long)) {
-                        elm.value.int64_array=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU ==immutable ulong)) {
-                        elm.value.uint64_array=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU == immutable double)) {
-                        elm.value.double_array=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU == immutable float)) {
-                        elm.value.float_array=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU == immutable decimal)) {
-                        elm.value.float_array=cast(BaseT)x;
-                    }
-                    else static if (is(UnqualU == immutable bool)) {
-                        elm.value.bool_array=cast(BaseT)x;
-                    }
-                    else {
-                        assert(0, "Native array must be immutable not "~T.stringof);
-                    }
-                }
-                else {
-                    static if (__traits(compiles,x.ptr)) {
-                        elm.value.binary=((cast(ubyte*)x.ptr)[0..BaseT.sizeof]).idup;
-                    }
-                    else {
-                        elm.value.binary=((cast(ubyte*)&x)[0..BaseT.sizeof]).idup;
-                    }
-                    elm.subtype=BinarySubType.userDefined;
-                }
-                result=true;
-                break;
-            case BOOLEAN:
-                elm.value.boolean=x;
-                result=true;
-                break;
-            case DATE:
-                static if (is(BaseT:Date)) {
-                    elm.value.date=x;
-                    result=true;
-                }
-                break;
-            case NULL:
-                result=true;
-                break;
-            case INT32:
-                elm.value.int32=x;
-                result=true;
-                break;
-            case UINT32:
-                elm.value.uint32=x;
-                result=true;
-                break;
-            case INT64:
-                elm.value.int64=x;
-                result=true;
-                break;
-            case UINT64:
-                static if (is(BaseT:ulong)) {
-                    elm.value.uint64=cast(ulong)x;
-                    result=true;
-                }
-                break;
-            case NATIVE_HiBON_ARRAY:
-                static if ( is(BaseT:const(HiBON[])) ) {
-                    elm.value.hbson_array=x;
-                    result=true;
-                }
-                break;
-            case NATIVE_ARRAY:
-                static if ( is(BaseT:const(Document[])) ) {
-                    elm.value.document_array=x;
-                    result=true;
-                }
-                break;
-            case NATIVE_STRING_ARRAY:
-                static if ( is(BaseT==string[]) ) {
-                    elm.value.text_array=x;
-                    result=true;
-                }
-                break;
-            case NATIVE_DOCUMENT:
-                static if ( is(BaseT:const(Document)) ) {
-                    elm.value.binary=x.data;
-                    result=true;
-                }
-                break;
-            }
-            assert(result, format("Unmatch type %s(%s) @ %s. Expected  HiBON type '%s'",
-                    T.stringof, TypeString!T, key, typeString));
-        }
-    }
+      break;
+      case BINARY:
+      static if (is(BaseT:U[],U)) {
+      alias UnqualU=Unqual!U;
+      static if (is(UnqualU == immutable ubyte)) {
+      elm.value.binary=cast(BaseT)x;
+      }
+      else static if (is(UnqualU == immutable int)) {
+      elm.value.int32_array=cast(BaseT)x;
+      }
+      else static if (is(UnqualU == immutable uint)) {
+      elm.value.uint32_array=cast(BaseT)x;
+      }
+      else static if (is(UnqualU == immutable long)) {
+      elm.value.int64_array=cast(BaseT)x;
+      }
+      else static if (is(UnqualU ==immutable ulong)) {
+      elm.value.uint64_array=cast(BaseT)x;
+      }
+      else static if (is(UnqualU == immutable double)) {
+      elm.value.double_array=cast(BaseT)x;
+      }
+      else static if (is(UnqualU == immutable float)) {
+      elm.value.float_array=cast(BaseT)x;
+      }
+      else static if (is(UnqualU == immutable decimal)) {
+      elm.value.float_array=cast(BaseT)x;
+      }
+      else static if (is(UnqualU == immutable bool)) {
+      elm.value.bool_array=cast(BaseT)x;
+      }
+      else {
+      assert(0, "Native array must be immutable not "~T.stringof);
+      }
+      }
+      else {
+      static if (__traits(compiles,x.ptr)) {
+      elm.value.binary=((cast(ubyte*)x.ptr)[0..BaseT.sizeof]).idup;
+      }
+      else {
+      elm.value.binary=((cast(ubyte*)&x)[0..BaseT.sizeof]).idup;
+      }
+      elm.subtype=BinarySubType.userDefined;
+      }
+      result=true;
+      break;
+      case BOOLEAN:
+      elm.value.boolean=x;
+      result=true;
+      break;
+      case DATE:
+      static if (is(BaseT:Date)) {
+      elm.value.date=x;
+      result=true;
+      }
+      break;
+      case NULL:
+      result=true;
+      break;
+      case INT32:
+      elm.value.int32=x;
+      result=true;
+      break;
+      case UINT32:
+      elm.value.uint32=x;
+      result=true;
+      break;
+      case INT64:
+      elm.value.int64=x;
+      result=true;
+      break;
+      case UINT64:
+      static if (is(BaseT:ulong)) {
+      elm.value.uint64=cast(ulong)x;
+      result=true;
+      }
+      break;
+      case NATIVE_HiBON_ARRAY:
+      static if ( is(BaseT:const(HiBON[])) ) {
+      elm.value.hbson_array=x;
+      result=true;
+      }
+      break;
+      case NATIVE_ARRAY:
+      static if ( is(BaseT:const(Document[])) ) {
+      elm.value.document_array=x;
+      result=true;
+      }
+      break;
+      case NATIVE_STRING_ARRAY:
+      static if ( is(BaseT==string[]) ) {
+      elm.value.text_array=x;
+      result=true;
+      }
+      break;
+      case NATIVE_DOCUMENT:
+      static if ( is(BaseT:const(Document)) ) {
+      elm.value.binary=x.data;
+      result=true;
+      }
+      break;
+      }
+      assert(result, format("Unmatch type %s(%s) @ %s. Expected  HiBON type '%s'",
+      T.stringof, TypeString!T, key, typeString));
+      }
+      }
     */
 
     version(none)
@@ -652,67 +651,67 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             static assert(0, format("opIndexAssign does not support type %s", T.stringof));
         }
     }
-/+
-    unittest { // opIndexAssign type test
-        auto hbson=new HiBON;
-        {
-            const bool x=true;
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.BOOLEAN);
-        }
+    /+
+     unittest { // opIndexAssign type test
+     auto hbson=new HiBON;
+     {
+     const bool x=true;
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.BOOLEAN);
+     }
 
-        {
-            const int x=-42;
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.INT32);
-        }
+     {
+     const int x=-42;
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.INT32);
+     }
 
-        {
-            const long x=-42;
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.INT64);
-        }
+     {
+     const long x=-42;
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.INT64);
+     }
 
-        {
-            const double x=-42.42;
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.DOUBLE);
-        }
+     {
+     const double x=-42.42;
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.DOUBLE);
+     }
 
-        {
-            const uint x=42;
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.UINT32);
-        }
+     {
+     const uint x=42;
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.UINT32);
+     }
 
-        {
-            const ulong x=42;
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.UINT64);
-        }
+     {
+     const ulong x=42;
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.UINT64);
+     }
 
-        {
-            const float x=-42.42;
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.FLOAT);
-        }
+     {
+     const float x=-42.42;
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.FLOAT);
+     }
 
-        {
-            const string x="some_text";
-            enum type=typeof(x).stringof;
-            hbson[type]=x;
-            assert(hbson[type].type == Type.STRING);
-        }
+     {
+     const string x="some_text";
+     enum type=typeof(x).stringof;
+     hbson[type]=x;
+     assert(hbson[type].type == Type.STRING);
+     }
 
-    }
-+/
+     }
+     +/
     // void setNull(string key) {
     //     append(Type.NULL, key, null);
     // }
@@ -964,8 +963,8 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             case MAX:
             case NONE:
                 return '"'~to!string_t(to!string(_type))~'"';
-            // case UNDEFINED:
-            //     return "undefined";
+                // case UNDEFINED:
+                //     return "undefined";
             case NULL:
                 return "null";
             case DOUBLE:
@@ -973,25 +972,25 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             case FLOAT:
                 return to!string_t(value.number32);
             case STRING:
-            // case REGEX:
-            // case JS_CODE:
-            // case SYMBOL:
+                // case REGEX:
+                // case JS_CODE:
+                // case SYMBOL:
                 return to!string_t('"'~value.text~'"') ;
-            // case JS_CODE_W_SCOPE:
-            //     return to!string_t("["~value.codescope.code~", "~to!string(value.codescope.document.id)~"]");
+                // case JS_CODE_W_SCOPE:
+                //     return to!string_t("["~value.codescope.code~", "~to!string(value.codescope.document.id)~"]");
             case DOCUMENT:
             case ARRAY:
                 return object_toText(this);
             case BINARY:
                 return binary_toText();
-            // case OID:
-            //     return to!string_t(toHex(value.oid.id));
+                // case OID:
+                //     return to!string_t(toHex(value.oid.id));
             case BOOLEAN:
                 return to!string_t(value.boolean);
             case DATE:
                 return to!string_t('"'~value.date.toString~'"');
-            // case DBPOINTER:
-            //     return to!string_t('"'~to!string(_type)~'"');
+                // case DBPOINTER:
+                //     return to!string_t('"'~to!string(_type)~'"');
             case INT32:
                 return to!string_t(value.int32);
             case UINT32:
@@ -1000,8 +999,8 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
                 return '"'~to!string_t(value.int64)~'"';
             case UINT64:
                 return '"'~to!string_t(value.uint64)~'"';
-            // case TIMESTAMP:
-            //     return '"'~to!string_t(value.int64)~'"';
+                // case TIMESTAMP:
+                //     return '"'~to!string_t(value.int64)~'"';
             }
         assert(0, "Unmatch type");
     }
@@ -1567,10 +1566,10 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
             case GENERIC:
                 return value.binary;
 
-            // case FUNC:
-            // case BINARY:
-            // case UUID:
-            // case MD5:
+                // case FUNC:
+                // case BINARY:
+                // case UUID:
+                // case MD5:
             case userDefined:
                 check(0, format("The subtype %s should not be used as a type", subtype));
 //                return value.binary;
@@ -1590,8 +1589,8 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
                 return (cast(immutable(decimal)*)(value.float_array.ptr))[0..value.float_array.length*decimal.sizeof];
             case BOOLEAN_array:
                 return (cast(immutable(ubyte)*)(value.bool_array.ptr))[0..value.bool_array.length*bool.sizeof];
-            // case BIGINT, not_defined:
-            //     throw new HiBONException("Binary suptype "~to!string(subtype)~" not supported for buffer");
+                // case BIGINT, not_defined:
+                //     throw new HiBONException("Binary suptype "~to!string(subtype)~" not supported for buffer");
 
             }
 
