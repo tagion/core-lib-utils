@@ -225,10 +225,10 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
 
             // uint local_size;
             immutable where_to_put_size = index;
-            buffer.write(uint.init, &index);
+            buffer.binwrite(uint.init, &index);
             scope(success) {
                 immutable local_size = cast(uint)(index - where_to_put_size - uint.sizeof);
-                buffer.write(local_size, where_to_put_size);
+                buffer.binwrite(local_size, where_to_put_size);
             }
             with(Type) final switch(type) {
                     foreach(E; EnumMembers!Type) {
@@ -240,18 +240,18 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
                         else {
                         // Write local as a place holder
                         immutable index_to_put_type = buffer.length;
-                        buffer.write(type, &index);
+                        buffer.binwrite(type, &index);
                         static if ( HiLIST ) {
-                            buffer.write(ubyte.init, &index);
-                            buffer.write(key, &index);
+                            buffer.binwrite(ubyte.init, &index);
+                            buffer.binwrite(key, &index);
                         }
                         else {
-                            buffer.write(cast(ubyte)(key.length), &index);
+                            buffer.binwrite(cast(ubyte)(key.length), &index);
                             buffer.array_write(key, index);
                         }
                         // ubyte[] xxx=[1,2,3,4];
                         // buffer[index
-//                        buffer.write(xxx, &index);
+//                        buffer.binwrite(xxx, &index);
 
                         //local_size = cast(uint)(Type.sizeof + ubyte.sizeof + key.length);
 
@@ -288,7 +288,7 @@ void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(
                             */
                             }
                             else static if ( isBasicType!T ) {
-                                buffer.write(value.get!E, &index);
+                                buffer.binwrite(value.get!E, &index);
                             }
                         }
                         }

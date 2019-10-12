@@ -313,17 +313,30 @@ struct Element {
     /*
      * -----
      * //data image:
-     * +-----------------------------------+
-     * | [type] | [key] | [val | unused... |
-     * +-----------------------------------+
+     * +-------------------------------------------+
+     * | [Type] | [len] | [key] | [val | unused... |
+     * +-------------------------------------------+
      *          ^ type offset(1)
-     *                  ^ keySize
-     *                         ^ size
-     *                                     ^ data.length
+     *                  ^ len offset(2)
+     *                          ^ keySize + 2
+     *                                 ^ size
+     *                                             ^ data.length
+     *
+     * For a list time the len is zero as follows
+     * +-------------------------------------------+
+     * | [Type] | [len] | [index] | [val | unused... |
+     * +---------------------------------------------+
+     *          ^ type offset(1)
+     *                  ^ len offset(2)
+     *                            ^ keySize + 2
+     *                                    ^ size
+     *                                               ^ data.length
+     *
      * -----
      */
+    immutable uint index; // This only used to list elements
     immutable(ubyte[]) _data;
-
+    enum MIN_ELEMENT_SIZE = Type.sizeof + ubyte.sizeof + char.sizeof + uint.sizeof;
     // size_t size() const pure nothrow {
     //     return 0;
     // }
@@ -334,10 +347,188 @@ public:
         _data = data;
     }
 
+    enum KEY_POS = Type.sizeof + keyLen.sizeof;
+
+    @property const {
+        string key() {
+            //    .check(!isIndex, "This an index not a key");
+            return cast(string)(_data[KEY_POS..valuePos]);
+        }
+
+        bool isType(T)() {
+            enum E = ValueT.asType!T;
+            return type is E;
+        }
+
+        @trusted
+        const(Value*) value() {
+            if ( isArray(type) ) {
+                switch(type) {
+                    static foreach(E; EnumMembers!Type) {
+                        static if (!isNative(E) && isArray(E)) {
+                        case E:
+                            pragma(msg, "E=",E, " isArray(E)=", isArray(E));
+                            alias T = Value.TypeT!E;
+                            static if ( is(T: U[], U) ) {
+                            immutable birary_array_pos = valuePos+uint.sizeof;
+                            immutable byte_size = *cast(uint*)(_data[valuePos..birary_array_pos].ptr);
+                            immutable len = byte_size / U.sizeof;
+//                            Value* result;
+//                            static if (isArray(E)) {
+                            return new Value((cast(immutable(U)*)(_data[birary_array_pos..$].ptr))[0..len]);
+                            // }
+                            // else {
+                            //     result = (cast(T*)(_data[birary_array_pos..$].ptr))[0..len];
+                            // }
+
+                            }
+                            goto default;
+                        }
+                    }
+                default:
+                    .check(0, format("Invalid type %s", type));
+                }
+            }
+            else {
+                return cast(Value*)(_data[valuePos..$].ptr);
+            }
+            assert(0);
+        }
+
+        /*
+        const(T) get(T)() {
+            enum E = ValueT.asType!T;
+            .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
+            return
+        }
+        */
+    }
 
     @property @safe const pure nothrow {
         bool isEod() {
             return _data.length == 0;
+        }
+
+        Type type() {
+            if (isEod) {
+                return Type.NONE;
+            }
+            return cast(Type)(_data[0]);
+        }
+
+        ubyte keyLen() {
+            return cast(Type)(_data[Type.sizeof]);
+        }
+
+        /*
+        bool isIndex() {
+            return len is 0;
+        }
+        */
+
+/*
+        uint index() {
+            .check(isIndex, "This a key not an index");
+            return
+        }
+*/
+
+        uint valuePos() {
+            return KEY_POS+keyLen;
+        }
+
+        @trusted
+        uint size() {
+            with(Type) switch(type) {
+                static foreach(E; EnumMembers!Type) {
+                case E:
+                    static if (E is DOCUMENT) {
+                        immutable document_pos = valuePos+uint.sizeof;
+                        immutable byte_size = *cast(uint*)(_data[valuePos..document_pos].ptr);
+                        return byte_size;
+                    }
+                    else static if (E !is NONE) {
+                        alias T = Value.TypeT!E;
+                        static if ( isArray(E) ) {
+                            static if (isNative(E)) {
+                                return 0;
+                            }
+                            else {
+                                immutable binary_array_pos = valuePos+uint.sizeof;
+                                immutable byte_size = *cast(uint*)(_data[valuePos..binary_array_pos].ptr);
+                                return binary_array_pos + byte_size;
+                            }
+                        }
+                        else {
+                            return valuePos + T.sizeof;
+                        }
+                    }
+                    else {
+                        goto default;
+                    }
+                }
+                default:
+                    // empty
+                }
+            assert(0, format("Bad type %s", type));
+        }
+
+        enum ErrorCode {
+            NONE,           // No errors
+            DOCUMENT_TYPE,  // Warning document type
+            TOO_SMALL,      // Data stream is too small to contain valid data
+            ILLEGAL_TYPE,   // Use of internal types is illegal
+            INVALID_TYPE,   // Type is not defined
+            OVERFLOW,       // The specifed data does not fit into the data stream
+            ARRAY_SIZE_BAD // The binary-array size in bytes is not a multipla of element size in the array
+        }
+
+        /**
+           Check if the element is valid
+         */
+        ErrorCode valid() {
+            with(ErrorCode) {
+                if ( type is Type.DOCUMENT ) {
+                    return DOCUMENT_TYPE;
+                }
+                if ( _data.length < MIN_ELEMENT_SIZE ) {
+                    return TOO_SMALL;
+                }
+                switch(type) {
+                    static foreach(E; EnumMembers!Type) {
+                    case E:
+                        static if ( (isNative(E) || (E is Type.TRUNC) || (E is Type.DEFINED_ARRAY) ) ) {
+                            return ILLEGAL_TYPE;
+                        }
+                        break;
+                    default:
+                        return INVALID_TYPE;
+                    }
+                }
+                if ( size < _data.length ) {
+                    return OVERFLOW;
+                }
+                if ( isArray(type) ) {
+                    immutable binary_array_pos = valuePos+uint.sizeof;
+                    immutable byte_size = *cast(uint*)(_data[valuePos..binary_array_pos].ptr);
+                    switch(type) {
+                        static foreach(E; EnumMembers!Type) {
+                            static if ( isArray(E) && !isNative(E) ) {
+                            case E:
+                                alias T = ValueT.TypeT!E;
+                                static if ( is(T : U[], U) ) {
+                                    if ( byte_size % U.sizeof !is 0 ) {
+                                        return ARRAY_SIZE_BAD;
+                                    }
+                                }
+                            }
+                        }
+                    default:
+                        // empty
+                    }
+                }
+                return NONE;
+            }
         }
 
         version(none) {
@@ -419,6 +610,7 @@ public:
         }
     }
 
+    version(none)
     @property @safe const pure nothrow {
         Type type() {
             if (isEod) {
@@ -495,13 +687,13 @@ public:
         // }
 
     }
-
+/*
         uint index() const {
             uint result;
             check(is_index(key, result), format("Key is '%s' which is not a valid index number", key));
             return result;
         }
-
+*/
     version(none) {
         string typeString() pure const  {
             if ( type is Type.BINARY ) {
@@ -541,6 +733,7 @@ public:
         return *cast(T*)(value.ptr);
     }
 
+    version(none)
     @property
     size_t size() const {
         size_t s;

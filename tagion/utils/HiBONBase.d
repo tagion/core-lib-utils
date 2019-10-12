@@ -9,6 +9,12 @@ import std.format;
 import std.meta : AliasSeq; //, Filter;
 import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, isType, Unqual, getUDAs, hasUDA;
 
+import std.system : Endian;
+import bin = std.bitmanip;
+
+alias binread(T, R) = bin.read!(T, Endian.littleEndian, R);
+alias binwrite(T, R) = bin.write!(T, Endian.littleEndian, R);
+
 /**
  * Exception type used by tagion.utils.BSON module
  */
@@ -41,9 +47,11 @@ enum Type : ubyte {
         UINT64          = 0x22,  // 64 bit unsigned integer
 //        HASHDOC         = 0x23,  // Hash point to documement
 //        UBIGINT         = 0x2B,  /// Unsigned Bigint
-//        TRUNC           = 0x3f,  // Trunc value for the native type
+        TRUNC           = 0x3f,  // Mask for basic values
 
-        NATIVE_DOCUMENT = 0x40 | DOCUMENT, // This type is only used as an internal represention (Document type)
+
+        DEFINED_NATIVE  = 0x40,
+        NATIVE_DOCUMENT = DEFINED_NATIVE | DOCUMENT, // This type is only used as an internal represention (Document type)
 
         DEFINED_ARRAY   = 0x80,  // Indicated an Intrinsic array types
         BINARY          = DEFINED_ARRAY | 0x05, // Binary data
@@ -53,14 +61,27 @@ enum Type : ubyte {
         BOOLEAN_ARRAY   = DEFINED_ARRAY | BOOLEAN,
         UINT32_ARRAY    = DEFINED_ARRAY | UINT32,
         UINT64_ARRAY    = DEFINED_ARRAY | UINT64,
-        FLOAT32_ARRAY    = DEFINED_ARRAY | FLOAT32,
+        FLOAT32_ARRAY   = DEFINED_ARRAY | FLOAT32,
         //     FLOAT128_ARRAY   = DEFINED_ARRAY | FLOAT128,
 
         /// Native types is only used inside the BSON object
-        NATIVE_HIBON_ARRAY    = DEFINED_ARRAY | DOCUMENT, // Represetents (HISON[]) is convert to an ARRAY of DOCUMENT's
-        NATIVE_DOCUMENT_ARRAY = DEFINED_ARRAY | NATIVE_DOCUMENT, // Represetents (Document[]) is convert to an ARRAY of DOCUMENT's
-        NATIVE_STRING_ARRAY   = DEFINED_ARRAY | STRING, // Represetents (string[]) is convert to an ARRAY of string's
+        NATIVE_HIBON_ARRAY    = DEFINED_ARRAY | DEFINED_NATIVE | DOCUMENT, // Represetents (HISON[]) is convert to an ARRAY of DOCUMENT's
+        NATIVE_DOCUMENT_ARRAY = DEFINED_ARRAY | DEFINED_NATIVE | NATIVE_DOCUMENT, // Represetents (Document[]) is convert to an ARRAY of DOCUMENT's
+        NATIVE_STRING_ARRAY   = DEFINED_ARRAY | DEFINED_NATIVE | STRING, // Represetents (string[]) is convert to an ARRAY of string's
         }
+
+
+@safe
+bool isNative(Type type) pure nothrow {
+    return ((type & Type.DEFINED_NATIVE) !is 0);
+}
+
+@safe
+bool isArray(Type type) pure nothrow {
+    with(Type) {
+        return ((type & DEFINED_ARRAY) !is 0) && (type !is DEFINED_ARRAY) && (type !is NONE);
+    }
+}
 
 
 @safe class HiBON;
@@ -216,7 +237,7 @@ union ValueT(bool NATIVE=false, HiBON,  HiList, Document) {
         }
     }
 
-    alias type(Type aType) = typeof(get!aType());
+    alias TypeT(Type aType) = typeof(get!aType());
 
     uint size(Type E)() const pure nothrow {
         alias T = type!E;
