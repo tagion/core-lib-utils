@@ -96,7 +96,6 @@ bool isHiBONType(Type type) pure nothrow {
         switch(type) {
             static foreach(E; EnumMembers!Type) {
             case E:
-                pragma(msg, "isHiBONType E=", E, " : ", isNative(E));
                 static if (isNative(E) || (E is NONE) || (E is DEFINED_ARRAY)) {
                     return false;
                 }
@@ -380,7 +379,7 @@ unittest {
     return false;
 }
 
-unittest {
+unittest { // check is_index
     import std.conv : to;
     uint index;
     assert(is_index("0", index));
@@ -413,7 +412,7 @@ body {
     return a < b;
 }
 
-unittest {
+unittest { // Check less_than
     import std.conv : to;
     assert(less_than("a", "b"));
     assert(less_than(0.to!string, 1.to!string));
@@ -444,7 +443,7 @@ unittest {
     return false;
 }
 
-unittest {
+unittest { // Check is_key_valid
     import std.conv : to;
     import std.range : iota;
     import std.algorithm.iteration : map, each;
