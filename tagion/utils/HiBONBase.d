@@ -310,114 +310,6 @@ unittest {
     //value=a;
 }
 
-template ValueSeqBase(T, Members...) {
-    static if ( Members.length == 0 ) {
-        alias ValueSeqBase=AliasSeq!();
-    }
-    else {
-        enum name=Members[0];
-        enum code="alias member=T."~name~";";
-        mixin(code);
-        alias MemberT=typeof(member);
-        enum MemberUDA=getUDAs!(member, Type)[0];
-        static if ( Type.NONE == MemberUDA ) {
-            alias MemberSeq=AliasSeq!();
-        }
-        else {
-            alias MemberSeq=AliasSeq!(MemberT, MemberUDA, name);
-        }
-        alias ValueSeqBase=AliasSeq!(MemberSeq, ValueSeqBase!(T, Members[1..$]));
-    }
-}
-
-template ValueTypeBase(Type type, Seq...) {
-//    static assert(Seg.length == 0, format("Type %s not supported", type));
-    static if ( Seq.length == 0 ) {
-        alias ValueTypeBase = void;
-    }
-    else static if ( type == Seq[1] ) {
-//        pragma(msg, ":: ", Seq[1], type);
-        alias ValueTypeBase = Seq[0];
-    }
-    else {
-        alias ValueTypeBase = ValueTypeBase!(type, Seq[3..$]);
-    }
-}
-
-alias ValueType(Type type, VSeq...) = ValueTypeBase!(type, VSeq);
-
-template ValueSeqFilterBase(alias pred, Seq...) {
-    static if (Seq.length == 0) {
-        alias ValueSeqFilterBase=AliasSeq!();
-    }
-    else {
-        static if (__traits(compiles, pred!(Seq[0..3])) ) {
-            static if (pred!(Seq[0..3])) {
-                alias taken=AliasSeq!(Seq[0..3]);
-            }
-            else {
-                alias taken=AliasSeq!();
-            }
-        }
-        else {
-            static if (pred!(Seq[0])) {
-                alias taken=AliasSeq!(Seq[0..3]);
-            }
-            else {
-                alias taken=AliasSeq!();
-            }
-        }
-        alias ValueSeqFilterBase=AliasSeq!(taken, ValueSeqFilterBase!(pred, Seq[3..$]));
-    }
-}
-
-// HBSON DType sequency Filter
-alias ValueSeqFilter(VSeq, alias pred)=ValueSeqFilterBase!(pred, VSeq);
-
-enum CheckValueBasicType(TList...) = isBasicType!(TList[0]) && (TList[1] !is Type.UTC);
-
-alias ValueSeqBasicTypes(VSeq)=ValueSeqFilter!(VSeq, CheckValueBasicType);
-
-template isValueBinaryType(T) {
-    static if ( is(T:immutable(decimal_t)[]) ) {
-        enum isValueBinaryType = true;
-    }
-    else static if ( is(T: U[], U) && !isSomeString!T ) {
-        enum isValueBinaryType = isBasicType!U;
-    }
-    else {
-        enum isValueBinaryType = false;
-    }
-}
-
-alias ValueSeqBinaryTypes(V)=ValueSeqFilter!(V, isValueBinaryType);
-
-enum CheckValueIntegralType(TList...) = isIntegral!(TList[0]) && (TList[1] !is Type.UTC);
-
-alias ValueSeqIntegralTypes(V) = ValueSeqFilter!(V, CheckValueIntegralType);
-
-enum CheckValueNumericType(TList...) = isNumeric!(TList[0]) && (TList[1] !is Type.UTC);
-
-alias ValueSeqNumericTypes(V) = ValueSeqFilter!(V, CheckValueNumericType);
-
-template DTypes(Seq...) {
-    static if ( Seq.length == 0 ) {
-        alias ValueDTypes = AliasSeq!();
-    }
-    else {
-        alias ValueDTypes = AliasSeq!(T[0], ValueDTypes!(Seq[3..$]));
-    }
-}
-
-template HiBONTypes(Seq...) {
-    static if ( Seq.length == 0 ) {
-        enum HiBONTypes = AliasSeq!();
-    }
-    else {
-        pragma(msg, Seq[1]);
-        enum HiBONTypes = AliasSeq!(Seq[1], HiBONTypes!(Seq[3..$]));
-    }
-}
 
 @safe bool is_index(string a, out uint result) pure {
     import std.conv : to;
@@ -463,10 +355,6 @@ body {
             BACK_QUOTE = 0x60
             }
     if ( a.length > 0 ) {
-        // if ( (a[0] > '0') && (a[0] <= '9') ) {
-        //     // Key can not start with at decimal number except for '0'
-        //     return false;
-        // }
         foreach(c; a) {
             // Chars between SPACE and DEL is valid
             // except for " ' ` is not valid

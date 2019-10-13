@@ -22,6 +22,7 @@ import std.format;
 import std.meta : AliasSeq, Filter;
 import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs, EnumMembers, Unqual;
 import std.conv : to, emplace;
+import std.algorithm.iteration : map;
 
 import tagion.Types : decimal_t;
 import tagion.Base : isOneOf;
@@ -41,17 +42,6 @@ static assert(uint.sizeof == 4);
 
 @safe struct Document {
     protected alias Value=ValueT!(false, void, Document);
-    // alias ValueSeq = .ValueSeq!(Value);
-    // alias ValueType(Type type) = .ValueType!(type, ValueSeq);
-    // pragma(msg, ValueSeq);
-    //alias ValueSeqBasicTypes = ValueSeqBasicTypes!(ValueSeq);
-    //pragma(msg, ValueSeqBasicTypes);
-    // pragma(msg, ValueSeqBinaryTypes);
-    // pragma(msg, ValueSeq);
-    // pragma(msg, ValueSeqIntegralTypes);
-    // pragma(msg, ValueSeqNumericTypes);
-    // enum table=HiBONTypes!(ValueSeqNumericTypes);
-    // pragma(msg, table.stringof);
     immutable(ubyte[]) data;
 
     this(immutable ubyte[] data) nothrow {
@@ -63,18 +53,8 @@ static assert(uint.sizeof == 4);
     }
 
     @trusted
-    void copy(Document* doc_ptr)
-        in {
-            assert(doc_ptr !is null);
-        }
-    do {
-//         extern(C) void* memcpy (
-//   scope return void* s1,
-//   scope const(void*) s2,
-//   ulong n
-// ) pure nothrow @nogc;
-        import core.stdc.string : memcpy;
-        memcpy(doc_ptr, &this, this.sizeof);
+    void copy(ref Document doc) {
+        emplace(&this, doc);
     }
     /*
     Document idup() const nothrow {
@@ -277,46 +257,46 @@ static assert(uint.sizeof == 4);
         return Range(data);
     }
 
-    version(none) {
-        auto keys() const {
-            return map!"a.key"(Range(data));
-        }
+    //  version(none) {
+    auto keys() const {
+        return map!"a.key"(Range(data));
+    }
 
-        // Throws an std.conv.ConvException if the keys can not be convert to an uint
-        auto indices() const {
-            return map!"a.key.to!uint"(Range(data));
-        }
+    // Throws an std.conv.ConvException if the keys can not be convert to an uint
+    auto indices() const {
+        return map!"a.key.to!uint"(Range(data));
+    }
 
-        bool hasElement(in string key) const {
-            return !opIn_r(key).isEod();
-        }
+    bool hasElement(in string key) const {
+        return !opIn_r(key).isEod();
+    }
 
-        bool hasElement(Index)(in Index index) const if (isIntegral!Index) {
-            return hasElement(index.to!string);
-        }
+    bool hasElement(Index)(in Index index) const if (isIntegral!Index) {
+        return hasElement(index.to!string);
+    }
 
-        const(Element) opIn_r(in string key) const {
-            foreach (ref element; Range(data)) {
-                if (element.key == key) {
-                    return element;
-                }
+    const(Element) opIn_r(in string key) const {
+        foreach (ref element; Range(data)) {
+            if (element.key == key) {
+                return element;
             }
-            return Element();
         }
+        return Element();
+    }
 
-        const(Element) opIndex(in string key) const {
-            auto result=key in this;
-            .check(!result.isEod, format("Member named '%s' not found", key));
-            return result;
-        }
+    const(Element) opIndex(in string key) const {
+        auto result=key in this;
+        .check(!result.isEod, format("Member named '%s' not found", key));
+        return result;
+    }
 
-        const(Element) opIndex(Index)(in Index index) const if (isIntegral!Index) {
-            return opIndex(index.to!string);
-        }
+    const(Element) opIndex(Index)(in Index index) const if (isIntegral!Index) {
+        return opIndex(index.to!string);
+    }
 
 
-        alias serialize=data;
-
+    alias serialize=data;
+/*
         string toString() const {
             if (empty) {
                 return "{}";
@@ -325,6 +305,7 @@ static assert(uint.sizeof == 4);
         }
     }
 
+*/
 
 version(none) {
     unittest {
