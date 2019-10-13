@@ -567,7 +567,7 @@ public:
                 switch(type) {
                     static foreach(E; EnumMembers!Type) {
                     case E:
-                        static if ( (isNative(E) || (E is Type.TRUNC) || (E is Type.DEFINED_ARRAY) ) ) {
+                        static if ( (isNative(E) || (E is Type.DEFINED_ARRAY) ) ) {
                             return ILLEGAL_TYPE;
                         }
                         break TypeCase;

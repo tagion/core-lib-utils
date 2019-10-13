@@ -38,7 +38,6 @@ enum Type : ubyte {
         FLOAT64         = 0x01,  /// Floating point
         STRING          = 0x02,  /// UTF8 STRING
         DOCUMENT        = 0x03,  /// Embedded document (Both Object and Documents)
-        //    LIST            = 0x04,  /// Array List
         BOOLEAN         = 0x08,  /// Boolean - true or false
         UTC             = 0x09,  /// UTC datetime
         INT32           = 0x10,  /// 32-bit integer
@@ -51,7 +50,7 @@ enum Type : ubyte {
         UINT64          = 0x22,  // 64 bit unsigned integer
 //        HASHDOC         = 0x23,  // Hash point to documement
 //        UBIGINT         = 0x2B,  /// Unsigned Bigint
-        TRUNC           = 0x3f,  // Mask for basic values
+//        TRUNC           = 0x3f,  // Mask for basic values
 
 
         DEFINED_NATIVE  = 0x40,
@@ -96,7 +95,7 @@ bool isHiBONType(Type type) pure nothrow {
             static foreach(E; EnumMembers!Type) {
             case E:
                 pragma(msg, "isHiBONType E=", E, " : ", isNative(E));
-                static if (isNative(E) || (E is TRUNC) || (E is NONE) || (E is DEFINED_ARRAY)) {
+                static if (isNative(E) || (E is NONE) || (E is DEFINED_ARRAY)) {
                     return false;
                 }
                 else {
