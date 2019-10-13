@@ -8,6 +8,7 @@ import tagion.TagionExceptions : Check, TagionException;
 import std.format;
 import std.meta : AliasSeq; //, Filter;
 import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, isType, EnumMembers, Unqual, getUDAs, hasUDA;
+import std.typecons : Typedef;
 
 import std.system : Endian;
 import bin = std.bitmanip;
@@ -73,6 +74,7 @@ enum Type : ubyte {
         NATIVE_STRING_ARRAY   = DEFINED_ARRAY | DEFINED_NATIVE | STRING, // Represetents (string[]) is convert to an ARRAY of string's
         }
 
+alias utc_t = Typedef!(ulong, ulong.init, Type.UTC.stringof);
 
 @safe
 bool isNative(Type type) pure nothrow {
@@ -135,7 +137,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     // static if ( !is(HiList == void ) ) {
     //     @Type(Type.LIST)  HiList    list;
     // }
-    @Type(Type.UTC)       ulong     date;
+    @Type(Type.UTC)       utc_t     date;
     @Type(Type.INT32)     int       int32;
     @Type(Type.INT64)     long      int64;
     @Type(Type.UINT32)    uint      uint32;
@@ -209,7 +211,10 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
             static if ( __traits(compiles, typeof(member)) && hasUDA!(member, Type) ) {
                 enum MemberType=getUDAs!(member, Type)[0];
                 alias MemberT=typeof(member);
-                static if ( is(T == MemberT) ) {
+                static if ( (MemberType is Type.UTC) && is(T == utc_t) ) {
+                    enum GetType = MemberType;
+                }
+                else static if ( is(T == MemberT) ) {
                     enum GetType = MemberType;
                 }
                 else {
@@ -253,14 +258,12 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     void opAssign(T)(T x) if (isOneOf!(T, typeof(this.tupleof))) {
         static foreach(m; __traits(allMembers, ValueT) ) {
             static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
-                enum code="alias member=ValueT."~m~";";
-                mixin(code);
-                enum MemberType=getUDAs!(member, Type)[0];
-                static assert ( MemberType !is Type.NONE, format("%s is not supported", T ) );
                 static if ( is(T == struct) && !__traits(compiles, __traits(getMember, this, m) = x) ) {
-//                    pragma(msg, "T-> ", T, " : ", typeof(__traits(getMember, this, m)));
+                    enum code="alias member=ValueT."~m~";";
+                    mixin(code);
+                    enum MemberType=getUDAs!(member, Type)[0];
+                    static assert ( MemberType !is Type.NONE, format("%s is not supported", T ) );
                     x.copy(&__traits(getMember, this, m));
-//                    __traits(getMember, this, m) = T(x);
                 }
                 else {
                     __traits(getMember, this, m) = x;
@@ -294,19 +297,67 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
 
 
 unittest {
+    import std.typecons;
     import std.stdio;
-    ValueT!(false, void, void) value;
-    value.int32=10;
-    auto x=value.get!(Type.INT32);
-    value.float32=13.45;
-    auto y=value.get!(Type.FLOAT32);
+    alias Value = ValueT!(false, void, void);
 
-    value=1;
-    value=1.3;
+    { // Check invalid type
+        Value value;
+        static assert(!__traits(compiles, value='x'));
+    }
 
-//    char a='x';
-    static assert(!__traits(compiles, value='x'));
-    //value=a;
+    { // Simple data type
+        auto test_tabel=tuple(
+            float(-1.23), double(2.34), "Text", true, ulong(0x1234_5678_9ABC_DEF0),
+            int(-42), uint(42), long(-0x1234_5678_9ABC_DEF0)
+            );
+        foreach(i, t; test_tabel) {
+            Value v;
+            v=test_tabel[i];
+            alias U = test_tabel.Types[i];
+            enum E  = Value.asType!U;
+            writefln("%s :  %s : %s", test_tabel[i], U.stringof, Value.asType!U);
+            assert(test_tabel[i] == v.get!E);
+        }
+    }
+
+    { // utc test,
+        static assert(Value.asType!utc_t is Type.UTC);
+        utc_t time = 1234;
+        Value v;
+        v = time;
+        assert(v.get!(Type.UTC) == 1234);
+        alias U = Value.TypeT!(Type.UTC);
+        static assert(is(U == const utc_t));
+        static assert(!is(U == const ulong));
+    }
+
+    { // data arrays
+        alias Tabel=Tuple!(
+            immutable(ubyte)[], immutable(bool)[], immutable(int)[], immutable(uint)[],
+            immutable(long)[], immutable(ulong)[], immutable(float)[], immutable(double)[]
+            );
+        Tabel test_tabel;
+        test_tabel[0]=[1, 2, 3];
+        test_tabel[1]=[false, true, true];
+        test_tabel[2]=[-1, 7, -42];
+        test_tabel[3]=[1, 7, 42];
+        test_tabel[4]=[-1, 7, -42_000_000_000_000];
+        test_tabel[5]=[1, 7, 42_000_000_000_000];
+        test_tabel[6]=[-1.7, 7, 42.42e10];
+        test_tabel[7]=[1.7, -7, 42,42e207];
+
+        foreach(i, t; test_tabel) {
+            Value v;
+            v=t;
+            alias U = test_tabel.Types[i];
+            enum  E = Value.asType!U;
+            static assert(is(const U == Value.TypeT!E));
+            assert(t == v.get!E);
+            assert(t.length == v.get!E.length);
+            assert(t is v.get!E);
+        }
+    }
 }
 
 
