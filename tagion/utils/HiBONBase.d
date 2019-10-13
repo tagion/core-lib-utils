@@ -298,7 +298,6 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
 
 unittest {
     import std.typecons;
-    import std.stdio;
     alias Value = ValueT!(false, void, void);
 
     { // Check invalid type
@@ -316,7 +315,6 @@ unittest {
             v=test_tabel[i];
             alias U = test_tabel.Types[i];
             enum E  = Value.asType!U;
-            writefln("%s :  %s : %s", test_tabel[i], U.stringof, Value.asType!U);
             assert(test_tabel[i] == v.get!E);
         }
     }
@@ -415,6 +413,14 @@ body {
     return a < b;
 }
 
+unittest {
+    import std.conv : to;
+    assert(less_than("a", "b"));
+    assert(less_than(0.to!string, 1.to!string));
+    assert(!less_than("00", "0"));
+    assert(less_than("0", "abe"));
+}
+
 @safe bool is_key_valid(string a) pure nothrow {
     enum : char {
         SPACE = 0x20,
@@ -423,7 +429,7 @@ body {
             QUOTE = 39,
             BACK_QUOTE = 0x60
             }
-    if ( a.length > 0 ) {
+    if ( (a.length > 0) && (a.length <= ubyte.max) ) {
         foreach(c; a) {
             // Chars between SPACE and DEL is valid
             // except for " ' ` is not valid
@@ -439,8 +445,31 @@ body {
 }
 
 unittest {
-    assert(less_than("abe", "bob"));
-    assert(less_than("0", "abe"));
-    assert(less_than("0", "1"));
-    assert(!less_than("00", "0"));
+    import std.conv : to;
+    import std.range : iota;
+    import std.algorithm.iteration : map, each;
+
+    assert(!is_key_valid(""));
+    string text=" "; // SPACE
+    assert(!is_key_valid(text));
+    text=[0x80]; // Only simple ASCII
+    assert(!is_key_valid(text));
+    text="\""; // Double quote
+    assert(!is_key_valid(text));
+    text="'"; // Sigle quote
+    assert(!is_key_valid(text));
+    text="`"; // Back quote
+    assert(!is_key_valid(text));
+    text="\0";
+    assert(!is_key_valid(text));
+
+
+    assert(is_key_valid("abc"));
+    assert(is_key_valid(42.to!string));
+
+    text="";
+    iota(0,ubyte.max).each!((i) => text~='a');
+    assert(is_key_valid(text));
+    text~='B';
+    assert(!is_key_valid(text));
 }
