@@ -365,10 +365,10 @@ unittest {
     import std.conv : to;
     enum MAX_UINT_SIZE=to!string(uint.max).length;
     if ( a.length <= MAX_UINT_SIZE ) {
-        if ( a[0] == '0' ) {
+        if ( (a[0] is '0') && (a.length > 1) ) {
             return false;
         }
-        foreach(c; a[1..$]) {
+        foreach(c; a) {
             if ( (c < '0') || (c > '9') ) {
                 return false;
             }
@@ -380,6 +380,25 @@ unittest {
         }
     }
     return false;
+}
+
+unittest {
+    import std.conv : to;
+    uint index;
+    assert(is_index("0", index));
+    assert(index is 0);
+    assert(!is_index("-1", index));
+    assert(is_index(uint.max.to!string, index));
+    assert(index is uint.max);
+
+    assert(!is_index(((cast(ulong)uint.max)+1).to!string, index));
+
+    assert(is_index("42", index));
+    assert(index is 42);
+
+    assert(!is_index("0x0", index));
+    assert(!is_index("00", index));
+    assert(!is_index("01", index));
 }
 
 @safe bool less_than(string a, string b) pure
