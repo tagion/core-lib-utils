@@ -4,6 +4,7 @@
  */
 module tagion.utils.Document;
 
+import std.stdio;
 //import core.stdc.string;  // Some operations in Phobos not safe, pure and nothrow, e.g. cmp
 
 /*
@@ -301,15 +302,19 @@ static assert(uint.sizeof == 4);
 
     //  version(unittest) {
     static void build(T)(ref ubyte[] buffer, Type type, string key, T x, ref size_t index) {
+        import std.stdio;
 //            immutable start_index = index;
 //            buffer.write(uint.init, &index);
         buffer.binwrite(type, &index);
         buffer.binwrite(cast(ubyte)(key.length), &index);
         buffer.array_write(key, index);
         static if ( is(T: U[], U) ) {
+            writefln(":%s %d", key, index);
             immutable size=cast(uint)(x.length*U.sizeof);
             buffer.binwrite(size, &index);
             buffer.array_write(x, index);
+            writefln("\t%d", index);
+
         }
         else {
             buffer.binwrite(x, &index);
@@ -367,7 +372,7 @@ static assert(uint.sizeof == 4);
                 int,    Type.INT32.stringof,
                 long,   Type.INT64.stringof,
                 uint,   Type.UINT32.stringof,
-                ulong,  Type.UINT64.stringof
+                ulong,  Type.UINT64.stringof,
 //                utc_t,  Type.UTC.stringof
                 );
 
@@ -380,6 +385,7 @@ static assert(uint.sizeof == 4);
             test_tabel.UINT32   = 42;
             test_tabel.UINT64   = 0x0123_3456_789A_BCDF;
             test_tabel.BOOLEAN  = true;
+
             //test_tabel.UTC      = 1234;
 
             size_t index;
@@ -403,13 +409,10 @@ static assert(uint.sizeof == 4);
                 index = make(buffer, test_tabel, 1);
                 immutable data = buffer[0..index].idup;
                 const doc=Document(data);
-                foreach(e; doc[]) {
-                    writefln("{%s}", e.key);
-                }
                 assert(doc.length is 1);
-                writefln("%s", doc[Type.FLOAT32.stringof].get!float);
                 assert(doc[Type.FLOAT32.stringof].get!float == test_tabel[0]);
             }
+
             {
             index = make(buffer, test_tabel);
             immutable data = buffer[0..index].idup;
@@ -432,6 +435,48 @@ static assert(uint.sizeof == 4);
 //                writefln("%s", e);
 
             }
+            }
+            alias TabelArray = Tuple!(
+                // immutable(ubyte)[],  Type.BINARY.stringof,
+                // immutable(float)[],  Type.FLOAT32_ARRAY.stringof,
+                // immutable(double)[], Type.FLOAT64_ARRAY.stringof,
+                // immutable(int)[],    Type.INT32_ARRAY.stringof,
+                // immutable(long)[],   Type.INT64_ARRAY.stringof,
+                // immutable(uint)[],   Type.UINT32_ARRAY.stringof,
+                // immutable(ulong)[],  Type.UINT64_ARRAY.stringof,
+                // immutable(bool)[],   Type.BOOLEAN_ARRAY.stringof,
+                string,              Type.STRING.stringof
+
+                );
+            TabelArray test_tabel_array;
+            // test_tabel_array.BINARY        = [1, 2, 3];
+            // test_tabel_array.FLOAT32_ARRAY = [-1.23, 3, 20e30];
+            // test_tabel_array.FLOAT64_ARRAY = [10.3e200, -1e-201];
+            // test_tabel_array.INT32_ARRAY   = [-11, -22, 33, 44];
+            // test_tabel_array.INT64_ARRAY   = [0x17, 0xffff_aaaa, -1, 42];
+            // test_tabel_array.UINT32_ARRAY  = [11, 22, 33, 44];
+            // test_tabel_array.UINT64_ARRAY  = [0x17, 0xffff_aaaa, 1, 42];
+            // test_tabel_array.BOOLEAN_ARRAY = [true, false];
+            test_tabel_array.STRING        = "Text";
+
+//            Type
+            {
+                index = make(buffer, test_tabel_array);
+                immutable data = buffer[0..index].idup;
+                const doc=Document(data);
+                writefln("%s", doc);
+
+                writefln("doc.length=%d", doc.length);
+                writefln("doc[].front.size=%s", doc[].front.size);
+                foreach(e; doc[]) {
+                    writefln("key=%s", e.key);
+                }
+                foreach(i, t; test_tabel_array) {
+                    enum name = test_tabel_array.fieldNames[i];
+                    alias U   = test_tabel_array.Types[i];
+                    const e = doc[name];
+                    writefln("doc[%s] = %s", name, e.get!U);
+                }
             }
         }
 
@@ -511,17 +556,6 @@ struct Element {
      *                                 ^ size
      *                                             ^ data.length
      *
-     * For a list time the len is zero as follows
-     * +-------------------------------------------+
-     * | [Type] | [len] | [index] | [val | unused... |
-     * +---------------------------------------------+
-     *          ^ type offset(1)
-     *                  ^ len offset(2)
-     *                            ^ keySize + 2
-     *                                    ^ size
-     *                                               ^ data.length
-     *
-     * -----
      */
     immutable uint index; // This only used to list elements
     immutable(ubyte[]) _data;
@@ -539,11 +573,6 @@ public:
     enum KEY_POS = Type.sizeof + keyLen.sizeof;
 
     @property const {
-        // string key() {
-        //     //    .check(!isIndex, "This an index not a key");
-        //     return cast(string)(_data[KEY_POS..valuePos]);
-        // }
-
         bool isType(T)() {
             enum E = ValueT.asType!T;
             return type is E;
@@ -551,12 +580,14 @@ public:
 
         @trusted
         const(Value*) value() {
-            if ( isArray(type) ) {
+            if ( isArray(type) || (type is Type.STRING ) ) {
                 switch(type) {
                     static foreach(E; EnumMembers!Type) {
-                        static if (!isNative(E) && isArray(E)) {
+                        static if (!isNative(E) && isArray(E) || (E is Type.STRING) ) {
                         case E:
                             pragma(msg, "E=",E, " isArray(E)=", isArray(E));
+                            writeln( "E=",E, " isArray(E)=", isArray(E).stringof);
+
                             alias T = Value.TypeT!E;
                             static if ( is(T: U[], U) ) {
                             immutable birary_array_pos = valuePos+uint.sizeof;
@@ -658,7 +689,7 @@ public:
         @trusted
         size_t size() {
             with(Type) {
-                        TypeCase:
+            TypeCase:
 
                 switch(type) {
                 static foreach(E; EnumMembers!Type) {
@@ -670,7 +701,7 @@ public:
                     }
                     else static if (isHiBONType(E)) {
                         alias T = Value.TypeT!E;
-                        static if ( isArray(E) ) {
+                        static if ( isArray(E) || (E is STRING) ) {
                             static if (isNative(E)) {
                                 return 0;
                             }
@@ -1014,10 +1045,11 @@ public:
             return (_type == expectedType);
         }
 
+    /*
         T get(T)() const if (is(T==string)) {
             return cast(string)value[4..$];
         }
-
+    */
     version(none) {
     alias BasicTypes=Filter!(isBasicType, ValueSeqBasicTypes);
 
