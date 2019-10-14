@@ -220,7 +220,7 @@ static assert(uint.sizeof == 4);
                 _index = 0;
             }
             else {
-                _index = 4;
+                _index = uint.sizeof;
                 popFront();
             }
         }
@@ -319,9 +319,47 @@ static assert(uint.sizeof == 4);
 
     unittest {
         import std.stdio;
-        import std.typecons : Tuple;
+        import std.typecons : Tuple, isTuple;
         auto buffer=new ubyte[0x200];
-        {
+
+        size_t make(R)(ref ubyte[] buffer, R range, size_t end_index=size_t.max) if (isTuple!R) {
+            size_t index;
+            buffer.binwrite(uint.init, &index);
+            foreach(i, t; range) {
+                if ( i is end_index ) {
+                    break;
+                }
+                enum name = range.fieldNames[i];
+                writefln("name=%s", name);
+                alias U = range.Types[i];
+                enum  E = Value.asType!U;
+                build(buffer, E, name, t, index);
+            }
+            uint size;
+            size = cast(uint)(index - uint.sizeof);
+            buffer.binwrite(size, 0);
+            buffer.binwrite(Type.NONE, &index);
+            return index;
+        }
+
+        { // Test of null document
+            const doc = Document(null);
+            assert(doc.length is 0);
+            assert(doc[].empty);
+        }
+        { // Test of empty Document
+            size_t index;
+            buffer.binwrite(uint.init, &index);
+            buffer.binwrite(Type.NONE, &index);
+            buffer.binwrite(uint(1), 0);
+            immutable data=buffer[0..index].idup;
+            const doc = Document(data);
+            assert(doc.length is 0);
+            assert(doc[].empty);
+
+        }
+
+        { // Document with simple types
             alias Tabel = Tuple!(
                 float,  Type.FLOAT32.stringof,
                 double, Type.FLOAT64.stringof,
@@ -345,6 +383,8 @@ static assert(uint.sizeof == 4);
             //test_tabel.UTC      = 1234;
 
             size_t index;
+            /*
+
             buffer.binwrite(uint.init, &index);
             foreach(i, t; test_tabel) {
                 enum name = test_tabel.fieldNames[i];
@@ -357,24 +397,41 @@ static assert(uint.sizeof == 4);
             size = cast(uint)(index - uint.sizeof);
             buffer.binwrite(size, 0);
             buffer.binwrite(ubyte(0), &index);
+            */
 
+            { // Document with a single value
+                index = make(buffer, test_tabel, 1);
+                immutable data = buffer[0..index].idup;
+                const doc=Document(data);
+                foreach(e; doc[]) {
+                    writefln("{%s}", e.key);
+                }
+                assert(doc.length is 1);
+                writefln("%s", doc[Type.FLOAT32.stringof].get!float);
+                assert(doc[Type.FLOAT32.stringof].get!float == test_tabel[0]);
+            }
+            {
+            index = make(buffer, test_tabel);
             immutable data = buffer[0..index].idup;
             const doc=Document(data);
 
-            writefln("doc.length=%d index=%s %s", doc.length, index, data);
-
-
-            foreach(e; doc[]) {
-                writefln("{%s}", e.key);
-            }
+            auto keys=doc.keys;
             foreach(i, t; test_tabel) {
                 enum name = test_tabel.fieldNames[i];
                 alias U = test_tabel.Types[i];
                 enum  E = Value.asType!U;
-                writefln("%s", doc.hasElement(name));
+                assert(doc.hasElement(name));
                 const e = doc[name];
-                writefln("%s", e);
+                assert(e.get!U == test_tabel[i]);
+                assert(keys.front == name);
+                keys.popFront;
 
+                auto e_in = name in doc;
+                assert(e.get!U == test_tabel[i]);
+
+//                writefln("%s", e);
+
+            }
             }
         }
 
@@ -531,7 +588,7 @@ public:
         T get(T)() {
             enum E = Value.asType!T;
             .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
-            .check(E is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
+            .check(E !is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
             return value.get!E;
         }
 
