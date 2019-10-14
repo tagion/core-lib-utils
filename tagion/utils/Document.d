@@ -44,6 +44,8 @@ static assert(uint.sizeof == 4);
     protected alias Value=ValueT!(false, void, Document);
     immutable(ubyte[]) data;
 
+    @disable this();
+
     this(immutable ubyte[] data) nothrow {
         this.data = data;
     }
@@ -276,7 +278,7 @@ static assert(uint.sizeof == 4);
     }
 
     const(Element) opIn_r(in string key) const {
-        foreach (ref element; Range(data)) {
+        foreach (ref element; this[]) {
             if (element.key == key) {
                 return element;
             }
@@ -296,6 +298,91 @@ static assert(uint.sizeof == 4);
 
 
     alias serialize=data;
+
+    //  version(unittest) {
+    static void build(T)(ref ubyte[] buffer, Type type, string key, T x, ref size_t index) {
+//            immutable start_index = index;
+//            buffer.write(uint.init, &index);
+        buffer.binwrite(type, &index);
+        buffer.binwrite(cast(ubyte)(key.length), &index);
+        buffer.array_write(key, index);
+        static if ( is(T: U[], U) ) {
+            immutable size=cast(uint)(x.length*U.sizeof);
+            buffer.binwrite(size, &index);
+            buffer.array_write(x, index);
+        }
+        else {
+            buffer.binwrite(x, &index);
+        }
+//            buffer.write(
+    }
+
+    unittest {
+        import std.stdio;
+        import std.typecons : Tuple;
+        auto buffer=new ubyte[0x200];
+        {
+            alias Tabel = Tuple!(
+                float,  Type.FLOAT32.stringof,
+                double, Type.FLOAT64.stringof,
+                bool,   Type.BOOLEAN.stringof,
+                int,    Type.INT32.stringof,
+                long,   Type.INT64.stringof,
+                uint,   Type.UINT32.stringof,
+                ulong,  Type.UINT64.stringof
+//                utc_t,  Type.UTC.stringof
+                );
+
+            pragma(msg, Tabel);
+            Tabel test_tabel;
+            test_tabel.FLOAT32 = 1.23;
+            test_tabel.FLOAT64 = 1.23e200;
+            test_tabel.INT32   = -42;
+            test_tabel.INT64   = -0x0123_3456_789A_BCDF;
+            test_tabel.UINT32   = 42;
+            test_tabel.UINT64   = 0x0123_3456_789A_BCDF;
+            test_tabel.BOOLEAN  = true;
+            //test_tabel.UTC      = 1234;
+
+            size_t index;
+            buffer.binwrite(uint.init, &index);
+            foreach(i, t; test_tabel) {
+                enum name = test_tabel.fieldNames[i];
+                writefln("name=%s", name);
+                alias U = test_tabel.Types[i];
+                enum  E = Value.asType!U;
+                build(buffer, E, name, t, index);
+            }
+            uint size;
+            size = cast(uint)(index - uint.sizeof);
+            buffer.binwrite(size, 0);
+            buffer.binwrite(ubyte(0), &index);
+
+            immutable data = buffer[0..index].idup;
+            const doc=Document(data);
+
+            writefln("doc.length=%d index=%s %s", doc.length, index, data);
+
+
+            foreach(e; doc[]) {
+                writefln("{%s}", e.key);
+            }
+            foreach(i, t; test_tabel) {
+                enum name = test_tabel.fieldNames[i];
+                alias U = test_tabel.Types[i];
+                enum  E = Value.asType!U;
+                writefln("%s", doc.hasElement(name));
+                const e = doc[name];
+                writefln("%s", e);
+
+            }
+        }
+
+
+
+    }
+//    alias build(T)(ref ubyte[] buffer, ref size_t index, string key, T x) = build(buffer, index, Value
+//}
 /*
         string toString() const {
             if (empty) {
@@ -395,10 +482,10 @@ public:
     enum KEY_POS = Type.sizeof + keyLen.sizeof;
 
     @property const {
-        string key() {
-            //    .check(!isIndex, "This an index not a key");
-            return cast(string)(_data[KEY_POS..valuePos]);
-        }
+        // string key() {
+        //     //    .check(!isIndex, "This an index not a key");
+        //     return cast(string)(_data[KEY_POS..valuePos]);
+        // }
 
         bool isType(T)() {
             enum E = ValueT.asType!T;
@@ -490,6 +577,10 @@ public:
             return cast(Type)(_data[Type.sizeof]);
         }
 
+        string key() {
+            return cast(string)_data[KEY_POS..valuePos];
+        }
+
         /*
         bool isIndex() {
             return len is 0;
@@ -509,7 +600,10 @@ public:
 
         @trusted
         size_t size() {
-            with(Type) switch(type) {
+            with(Type) {
+                        TypeCase:
+
+                switch(type) {
                 static foreach(E; EnumMembers!Type) {
                 case E:
                     static if (E is DOCUMENT) {
@@ -533,11 +627,15 @@ public:
                             return valuePos + T.sizeof;
                         }
                     }
-                    goto default;
+                    else static if ( E is Type.NONE ) {
+                        return Type.sizeof;
+                    }
+                    break TypeCase;
                 }
                 default:
                     // empty
                 }
+            }
             assert(0, format("Bad type %s", type));
         }
 
@@ -761,6 +859,7 @@ public:
 
     @property const pure nothrow {
 
+        version(none)
         string key() @trusted {
             if (isEod) {
                 return null;

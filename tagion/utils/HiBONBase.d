@@ -277,7 +277,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         pragma(msg, "Size ", E, " : ", isHiBONType(E));
         static if (isHiBONType(E)) {
             alias T = TypeT!E;
-            static if ( isBasicValueType!T ) {
+            static if ( isBasicValueType!T || (E is Type.UTC)  ) {
                 return T.sizeof;
             }
             else static if ( is(T: U[], U) && isBasicValueType!U ) {
@@ -471,4 +471,14 @@ unittest { // Check is_key_valid
     assert(is_key_valid(text));
     text~='B';
     assert(!is_key_valid(text));
+}
+
+@safe
+void array_write(T)(ref ubyte[] buffer, T array, ref size_t index) pure if ( is(T : U[], U) && isBasicType!U ) {
+    const ubytes = cast(const(ubyte[]))array;
+    immutable new_index = index + ubytes.length;
+    scope(success) {
+        index = new_index;
+    }
+    buffer[index..new_index] = ubytes;
 }
