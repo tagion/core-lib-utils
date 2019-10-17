@@ -4,21 +4,6 @@
  */
 module tagion.utils.Document;
 
-import std.stdio;
-//import core.stdc.string;  // Some operations in Phobos not safe, pure and nothrow, e.g. cmp
-
-/*
-  import std.algorithm;
-  import std.conv;
-  import std.exception;  // assumeUnique
-  import std.datetime;   // Date, DateTime
-  import std.typecons;   // Tuple
-  import std.format;
-  import std.traits : isSomeString, isIntegral, isArray;
-  import std.algorithm.searching : maxElement;
-//import std.array : Appender;
-private import std.bitmanip;
-*/
 import std.format;
 import std.meta : AliasSeq, Filter;
 import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs, EnumMembers, Unqual;
@@ -323,7 +308,6 @@ static assert(uint.sizeof == 4);
     }
 
     unittest {
-        import std.stdio;
         import std.typecons : Tuple, isTuple;
         auto buffer=new ubyte[0x200];
 
@@ -421,7 +405,7 @@ static assert(uint.sizeof == 4);
                 assert(doc[Type.FLOAT32.stringof].get!float == test_tabel[0]);
             }
 
-            {
+            { // Document including basic types
                 index = make(buffer, test_tabel);
                 immutable data = buffer[0..index].idup;
                 const doc=Document(data);
@@ -439,13 +423,10 @@ static assert(uint.sizeof == 4);
 
                     auto e_in = name in doc;
                     assert(e.get!U == test_tabel[i]);
-
-//                writefln("%s", e);
-
                 }
             }
 //            Type
-            {
+            { // Document which includes basic arrays and string
                 index = make(buffer, test_tabel_array);
                 immutable data = buffer[0..index].idup;
                 const doc=Document(data);
@@ -458,11 +439,10 @@ static assert(uint.sizeof == 4);
                 }
             }
 
-            {
+            { // Document which includes sub-documents
                 auto buffer_subdoc=new ubyte[0x200];
                 index = make(buffer_subdoc, test_tabel);
                 immutable data_sub_doc = buffer_subdoc[0..index].idup;
-                writefln("index=%d", index);
                 const sub_doc=Document(data_sub_doc);
 
                 index = 0;
@@ -486,19 +466,15 @@ static assert(uint.sizeof == 4);
                 buffer.binwrite(size, 0);
 
                 immutable data = buffer[0..index].idup;
-                writefln("data=%s",data);
                 const doc=Document(data);
 
-                foreach(e; doc[]) {
-                    writefln("\tkey = %s %s %d", e.key, e.type, e.size);
+                { // Check int32 in doc
+                    const int32_e = doc[Type.INT32.stringof];
+                    assert(int32_e.type is Type.INT32);
+                    assert(int32_e.get!int is int(42));
+                    assert(int32_e.by!(Type.INT32) is int(42));
                 }
-                writefln("doc.length=%d", doc.length);
 
-                writefln("doc.keys=%s", doc.keys);
-
-                writefln("xxx=%s", doc[Type.INT32.stringof].get!int);
-
-                const int32_e
                 { // Check string in doc )
                     const string_e = doc[Type.STRING.stringof];
                     assert(string_e.type is Type.STRING);
@@ -506,48 +482,35 @@ static assert(uint.sizeof == 4);
                     assert(text.length is "Text".length);
                     assert(text == "Text");
                     assert(text == string_e.by!(Type.STRING));
-
-                const under_e = doc[doc_name];
-                writefln("under_e=%s", under_e);
-                writefln("under_e.key=%s", under_e.key);
-                assert(under_e.key == doc_name);
-                writefln("under_e.type=%s", under_e.type);
-                assert(under_e.type == Type.DOCUMENT);
-                writefln("under_e.size=%s", under_e.size);
-                writefln("under_e.size=%s", data_sub_doc.length + Type.sizeof + ubyte.sizeof + doc_name.length);
-                assert(under_e.size == data_sub_doc.length + Type.sizeof + ubyte.sizeof + doc_name.length);
-
-                const under_doc = doc[doc_name].get!Document;
-                writefln("under_doc.data=%s", under_doc.data);
-                writefln("data_sub_doc  =%s", data_sub_doc);
-                //under_doc.data);
-                writefln("under_doc.data.length=%s", under_doc.data.length);
-                writefln("data_sub_doc.length=%d", data_sub_doc.length);
-//                writefln("doc.data.length=%s", doc.data.length);
-                assert(under_doc.data.length == data_sub_doc.length);
-
-                foreach(e; under_doc[]) {
-                    writefln("\tkey = %s %s", e.key, e.type);
                 }
 
-                auto keys=under_doc.keys;
-                foreach(i, t; test_tabel) {
-                    enum name = test_tabel.fieldNames[i];
-                    alias U = test_tabel.Types[i];
-                    enum  E = Value.asType!U;
-                    assert(under_doc.hasElement(name));
-                    const e = under_doc[name];
-                    assert(e.get!U == test_tabel[i]);
-                    assert(keys.front == name);
-                    keys.popFront;
+                {
+                    const under_e = doc[doc_name];
+                    assert(under_e.key == doc_name);
+                    assert(under_e.type == Type.DOCUMENT);
+                    assert(under_e.size == data_sub_doc.length + Type.sizeof + ubyte.sizeof + doc_name.length);
 
-                    auto e_in = name in doc;
-                    assert(e.get!U == test_tabel[i]);
+                    const under_doc = doc[doc_name].get!Document;
+                    assert(under_doc.data.length == data_sub_doc.length);
+
+                    auto keys=under_doc.keys;
+                    foreach(i, t; test_tabel) {
+                        enum name = test_tabel.fieldNames[i];
+                        alias U = test_tabel.Types[i];
+                        enum  E = Value.asType!U;
+                        assert(under_doc.hasElement(name));
+                        const e = under_doc[name];
+                        assert(e.get!U == test_tabel[i]);
+                        assert(keys.front == name);
+                        keys.popFront;
+
+                        auto e_in = name in doc;
+                        assert(e.get!U == test_tabel[i]);
 
 //                writefln("%s", e);
 
+                    }
                 }
-
             }
 
         }
@@ -656,15 +619,9 @@ static assert(uint.sizeof == 4);
                         case E:
                             static if (E is Type.DOCUMENT) {
                                 immutable byte_size = *cast(uint*)(data[valuePos..valuePos+uint.sizeof].ptr);
-
-                                writefln("byte_size=%d", byte_size);
-                                writefln("data=%s", data[valuePos..valuePos+byte_size]);
-                                //   assert(0, "Set gets DOCUMENT");
-                    return new Value(Document(data[valuePos..valuePos+uint.sizeof+byte_size]));
+                                return new Value(Document(data[valuePos..valuePos+uint.sizeof+byte_size]));
                             }
                             else static if (isArray(E) || (E is Type.STRING)) {
-                                pragma(msg, "E=",E, " isArray(E)=", isArray(E));
-                                writeln( "E=",E, " isArray(E)=", isArray(E).stringof);
                                 alias T = Value.TypeT!E;
                                 static if ( is(T: U[], U) ) {
                                     immutable birary_array_pos = valuePos+uint.sizeof;
