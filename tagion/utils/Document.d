@@ -378,6 +378,9 @@ static assert(uint.sizeof == 4);
 
                     auto e_in = name in doc;
                     assert(e.get!U == test_tabel[i]);
+
+                    assert(e.type is E);
+                    assert(e.isType!U);
                 }
             }
 //            Type
@@ -391,6 +394,7 @@ static assert(uint.sizeof == 4);
                     const v = doc[name].get!U;
                     assert(v.length is test_tabel_array[i].length);
                     assert(v == test_tabel_array[i]);
+
                 }
             }
 
@@ -491,8 +495,8 @@ static assert(uint.sizeof == 4);
 
         @property const {
             bool isType(T)() {
-                enum E = ValueT.asType!T;
-                return type is E;
+                enum E = Value.asType!T;
+                return (E !is Type.NONE) && (type is E);
             }
 
             @trusted const(Value*) value() {
@@ -722,79 +726,13 @@ static assert(uint.sizeof == 4);
         }
 
 
-        version(none) {
-            string typeString() pure const  {
-                if ( type is Type.BINARY ) {
-                    return subtype.to!string;
-                }
-                else {
-                    return type.to!string;
-                }
-            }
-
-        }
-
-        version(none)
-        @property @safe const {
-            immutable(ubyte[]) value() {
-                if (isEod) {
-                    return null;
-                }
-                return data[1 + key.length..size];
-            }
-
-            /+
-             size_t valueSize() {
-             return value.length;
-             }
-             +/
-        }
-
-        //Binary buffer
-        version(none)
-        @trusted protected immutable(ubyte[]) binary_buffer() const {
-            immutable v=value;
-            immutable len=*cast(uint*)(v.ptr);
-            return v[uint.sizeof..len+uint.sizeof];
-        }
-
-        @trusted
-        protected T fromValue(T)() const pure nothrow {
-            return *cast(T*)(value.ptr);
-        }
-
-        version(none)
-        @property
-        size_t size() const {
-            size_t s;
-            with(Type) final switch (type) {
-                    foreach (E; EnumMembers!Type) {
-                    case E:
-                        alias T=ValueType!E;
-                        static if ( isOneOf!(T, Value.NativeValueDataTypes) ) {
-                            .check(0, format("Illigal HiBSON type %s", E));
-                        }
-                        else static if ( is(T:U[], U) ) {
-                            s=bodySize+uint.sizeof;
-                        }
-                        else {
-                            s=T.sizeof;
-                        }
-                        break;
-                    }
-                }
-            return 1 + key.length + s;
-        }
-        //alias size length;
-
-
-        bool isType(T)() pure const nothrow {
-            enum expectedType=TypeEnum!T;
-            if ( expectedType == Type.NONE ) {
-                return false;
-            }
-            return (_type == expectedType);
-        }
+        // bool isType(T)() pure const nothrow {
+        //     enum expectedType=Value.asType!T;
+        //     if ( expectedType is Type.NONE ) {
+        //         return false;
+        //     }
+        //     return (type is expectedType);
+        // }
 
         /*
           T get(T)() const if (is(T==string)) {
