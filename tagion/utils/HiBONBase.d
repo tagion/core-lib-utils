@@ -1,7 +1,5 @@
 module tagion.utils.HiBONBase;
 
-import std.stdio;
-
 import tagion.Types;
 import tagion.Base : isOneOf;
 import tagion.TagionExceptions : Check, TagionException;
@@ -115,10 +113,10 @@ bool isHiBONType(Type type) pure nothrow {
 }
 
 /*
-static unittest {
-    with(Type) {
-        assert(isHiBON(
-}
+  static unittest {
+  with(Type) {
+  assert(isHiBON(
+  }
 */
 
 //@safe class HiBON;
@@ -168,7 +166,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
 
     }
     // else {
-        alias NativeValueDataTypes = AliasSeq!();
+    alias NativeValueDataTypes = AliasSeq!();
     // }
     protected template GetFunctions(string text, bool first, TList...) {
         static if ( TList.length is 0 ) {
@@ -241,12 +239,10 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     }
 
     static if (!is(Document == void) && is(HiBON == void)) {
-    @trusted
-    this(Document doc) {
-        pragma(msg, "Document=",Document);
-        writefln("this.doc=%d", doc.data.length);
-        document = doc;
-    }
+        @trusted
+            this(Document doc) {
+            document = doc;
+        }
     }
 
     @trusted
@@ -254,16 +250,16 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         alias MutableT = Unqual!T;
         static foreach(m; __traits(allMembers, ValueT) ) {
             static if ( is(typeof(__traits(getMember, this, m)) == MutableT ) ){
-            enum code=format("alias member=ValueT.%s;", m);
-            mixin(code);
-            static if ( hasUDA!(member, Type ) ) {
-                alias MemberT   = typeof(member);
-                static if ( is(T == MemberT) ) {
-                    __traits(getMember, this, m) = x;
-                    return;
+                enum code=format("alias member=ValueT.%s;", m);
+                mixin(code);
+                static if ( hasUDA!(member, Type ) ) {
+                    alias MemberT   = typeof(member);
+                    static if ( is(T == MemberT) ) {
+                        __traits(getMember, this, m) = x;
+                        return;
+                    }
                 }
             }
-        }
         }
         assert (0, format("%s is not supported", T.stringof ) );
     }

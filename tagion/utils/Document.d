@@ -1,10 +1,8 @@
 /**
- * HBSON Document
+ * HiBON Document
  *
  */
 module tagion.utils.Document;
-
-import std.stdio;
 
 import std.format;
 import std.meta : AliasSeq, Filter;
@@ -404,7 +402,6 @@ static assert(uint.sizeof == 4);
                     assert(v == test_tabel_array[i]);
                     import traits=std.traits; // : isArray;
                     const e = doc[name];
-                    writefln("e.key=%s e.isThat!isArray=%s", e.key, e.isThat!(traits.isArray));
                     assert(!e.isThat!isBasicType);
                     assert(e.isThat!(traits.isArray));
 
@@ -500,19 +497,13 @@ static assert(uint.sizeof == 4);
                 const doc=Document(data);
 
                 auto typed_range = doc.range!(string[])();
-                import std.stdio;
                 foreach(i, text; texts) {
-                    writefln("value=%s %s", typed_range.front, typed_range.range.front.key);
                     assert(!typed_range.empty);
                     assert(typed_range.key == i.to!string);
                     assert(typed_range.index == i);
                     assert(typed_range.front == text);
                     typed_range.popFront;
-//                    build(buffer, Type.STRING, i.to!string, text, index);
                 }
-
-//                build(buffer, Type.DOCUMENT, doc_name, sub_doc, index);
-
             }
         }
     }
@@ -760,7 +751,6 @@ static assert(uint.sizeof == 4);
                     static foreach(E; EnumMembers!Type) {
                     case E:
                         static if (isHiBONType(E)) {
-                            pragma(msg, E);
                             alias T = Value.TypeT!E;
                             return That!T;
                         }
