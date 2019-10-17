@@ -244,9 +244,10 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         static assert(hasType!int);
     }
 
-    static if (!is(Document == void)) {
+    static if (!is(Document == void) && is(HiBON == void)) {
     @trusted
     this(Document doc) {
+        pragma(msg, "Document=",Document);
         writefln("this.doc=%d", doc.data.length);
         document = doc;
     }
