@@ -1,5 +1,6 @@
 module tagion.utils.HiBONBase;
 
+import std.stdio;
 
 import tagion.Types;
 import tagion.Base : isOneOf;
@@ -84,9 +85,16 @@ bool isNative(Type type) pure nothrow {
 }
 
 @safe
+bool isNativeArray(Type type) pure nothrow {
+    with(Type) {
+        return ((type & DEFINED_ARRAY) !is 0) && (isNative(type));
+    }
+}
+
+@safe
 bool isArray(Type type) pure nothrow {
     with(Type) {
-        return ((type & DEFINED_ARRAY) !is 0) && (type !is DEFINED_ARRAY) && (type !is NONE);
+        return ((type & DEFINED_ARRAY) !is 0) && (type !is DEFINED_ARRAY) && (!isNative(type));
     }
 }
 
@@ -132,6 +140,9 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     //  @Type(Type.LIST)
     static if ( !is(HiBON == void ) ) {
         @Type(Type.DOCUMENT)  HiBON      document;
+    }
+    else static if ( !is(Document == void ) ) {
+        @Type(Type.DOCUMENT)  Document      document;
     }
     // static if ( !is(HiList == void ) ) {
     //     @Type(Type.LIST)  HiList    list;
@@ -198,7 +209,6 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         assert(0);
     }
 
-
     protected template GetType(T, TList...) {
         static if (TList.length is 0) {
             enum GetType = Type.NONE;
@@ -234,8 +244,16 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         static assert(hasType!int);
     }
 
+    static if (!is(Document == void)) {
     @trusted
-    this(T)(T x) if (isOneOf!(Unqual!T, typeof(this.tupleof)) ) {
+    this(Document doc) {
+        writefln("this.doc=%d", doc.data.length);
+        document = doc;
+    }
+    }
+
+    @trusted
+    this(T)(T x) if (isOneOf!(Unqual!T, typeof(this.tupleof)) && !is(T : const(Document)) ) {
         alias MutableT = Unqual!T;
         static foreach(m; __traits(allMembers, ValueT) ) {
             static if ( is(typeof(__traits(getMember, this, m)) == MutableT ) ){

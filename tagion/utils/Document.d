@@ -302,24 +302,24 @@ static assert(uint.sizeof == 4);
 
     //  version(unittest) {
     static void build(T)(ref ubyte[] buffer, Type type, string key, T x, ref size_t index) {
-        import std.stdio;
-//            immutable start_index = index;
-//            buffer.write(uint.init, &index);
         buffer.binwrite(type, &index);
         buffer.binwrite(cast(ubyte)(key.length), &index);
         buffer.array_write(key, index);
         static if ( is(T: U[], U) ) {
-            writefln(":%s %d", key, index);
             immutable size=cast(uint)(x.length*U.sizeof);
             buffer.binwrite(size, &index);
             buffer.array_write(x, index);
-            writefln("\t%d", index);
+        }
+        else static if (is(T : const Document)) {
+            //immutable size=cast(uint)(x.data.length);
+            //writefln("size=%d", size);
+            //buffer.binwrite(size, &index);
+            buffer.array_write(x.data, index);
 
         }
         else {
             buffer.binwrite(x, &index);
         }
-//            buffer.write(
     }
 
     unittest {
@@ -327,23 +327,23 @@ static assert(uint.sizeof == 4);
         import std.typecons : Tuple, isTuple;
         auto buffer=new ubyte[0x200];
 
-        size_t make(R)(ref ubyte[] buffer, R range, size_t end_index=size_t.max) if (isTuple!R) {
+        size_t make(R)(ref ubyte[] buffer, R range, size_t count=size_t.max) if (isTuple!R) {
             size_t index;
             buffer.binwrite(uint.init, &index);
             foreach(i, t; range) {
-                if ( i is end_index ) {
+                if ( i is count ) {
                     break;
                 }
                 enum name = range.fieldNames[i];
-                writefln("name=%s", name);
+//                writefln("name=%s", name);
                 alias U = range.Types[i];
                 enum  E = Value.asType!U;
                 build(buffer, E, name, t, index);
             }
+            buffer.binwrite(Type.NONE, &index);
             uint size;
             size = cast(uint)(index - uint.sizeof);
             buffer.binwrite(size, 0);
-            buffer.binwrite(Type.NONE, &index);
             return index;
         }
 
@@ -352,6 +352,7 @@ static assert(uint.sizeof == 4);
             assert(doc.length is 0);
             assert(doc[].empty);
         }
+
         { // Test of empty Document
             size_t index;
             buffer.binwrite(uint.init, &index);
@@ -443,7 +444,6 @@ static assert(uint.sizeof == 4);
 
                 }
             }
-
 //            Type
             {
                 index = make(buffer, test_tabel_array);
@@ -457,10 +457,100 @@ static assert(uint.sizeof == 4);
                     assert(v == test_tabel_array[i]);
                 }
             }
+
+            {
+                auto buffer_subdoc=new ubyte[0x200];
+                index = make(buffer_subdoc, test_tabel);
+                immutable data_sub_doc = buffer_subdoc[0..index].idup;
+                writefln("index=%d", index);
+                const sub_doc=Document(data_sub_doc);
+
+                index = 0;
+                uint size;
+                buffer.binwrite(uint.init, &index);
+                enum doc_name="doc";
+//                build(buffer, Type.DOCUMENT, doc_name, data_sub_doc, index);
+//                size_t index_size;
+                //              buffer.binwrite(uint.init, &index);
+                //   index_size = index;
+                build(buffer, Type.INT32, Type.INT32.stringof, int(42), index);
+//                size = cast(uint)(size - index);
+                //              buffer.write(size, index_size);
+//                build(buffer, Type.DOCUMENT, doc_name, sub_doc, index);
+                build(buffer, Type.DOCUMENT, doc_name, sub_doc, index);
+                build(buffer, Type.STRING, Type.STRING.stringof, "Text", index);
+
+                buffer.binwrite(Type.NONE, &index);
+
+                size = cast(uint)(index - uint.sizeof);
+                buffer.binwrite(size, 0);
+
+                immutable data = buffer[0..index].idup;
+                writefln("data=%s",data);
+                const doc=Document(data);
+
+                foreach(e; doc[]) {
+                    writefln("\tkey = %s %s %d", e.key, e.type, e.size);
+                }
+                writefln("doc.length=%d", doc.length);
+
+                writefln("doc.keys=%s", doc.keys);
+
+                writefln("xxx=%s", doc[Type.INT32.stringof].get!int);
+
+                const int32_e
+                { // Check string in doc )
+                    const string_e = doc[Type.STRING.stringof];
+                    assert(string_e.type is Type.STRING);
+                    const text = string_e.get!string;
+                    assert(text.length is "Text".length);
+                    assert(text == "Text");
+                    assert(text == string_e.by!(Type.STRING));
+
+                const under_e = doc[doc_name];
+                writefln("under_e=%s", under_e);
+                writefln("under_e.key=%s", under_e.key);
+                assert(under_e.key == doc_name);
+                writefln("under_e.type=%s", under_e.type);
+                assert(under_e.type == Type.DOCUMENT);
+                writefln("under_e.size=%s", under_e.size);
+                writefln("under_e.size=%s", data_sub_doc.length + Type.sizeof + ubyte.sizeof + doc_name.length);
+                assert(under_e.size == data_sub_doc.length + Type.sizeof + ubyte.sizeof + doc_name.length);
+
+                const under_doc = doc[doc_name].get!Document;
+                writefln("under_doc.data=%s", under_doc.data);
+                writefln("data_sub_doc  =%s", data_sub_doc);
+                //under_doc.data);
+                writefln("under_doc.data.length=%s", under_doc.data.length);
+                writefln("data_sub_doc.length=%d", data_sub_doc.length);
+//                writefln("doc.data.length=%s", doc.data.length);
+                assert(under_doc.data.length == data_sub_doc.length);
+
+                foreach(e; under_doc[]) {
+                    writefln("\tkey = %s %s", e.key, e.type);
+                }
+
+                auto keys=under_doc.keys;
+                foreach(i, t; test_tabel) {
+                    enum name = test_tabel.fieldNames[i];
+                    alias U = test_tabel.Types[i];
+                    enum  E = Value.asType!U;
+                    assert(under_doc.hasElement(name));
+                    const e = under_doc[name];
+                    assert(e.get!U == test_tabel[i]);
+                    assert(keys.front == name);
+                    keys.popFront;
+
+                    auto e_in = name in doc;
+                    assert(e.get!U == test_tabel[i]);
+
+//                writefln("%s", e);
+
+                }
+
+            }
+
         }
-
-
-
     }
 //    alias build(T)(ref ubyte[] buffer, ref size_t index, string key, T x) = build(buffer, index, Value
 //}
@@ -536,9 +626,7 @@ static assert(uint.sizeof == 4);
          *                                             ^ data.length
          *
          */
-        immutable uint index; // This only used to list elements
-        immutable(ubyte[]) _data;
-        enum MIN_ELEMENT_SIZE = Type.sizeof + ubyte.sizeof + char.sizeof + uint.sizeof;
+        immutable(ubyte[]) data;
         // size_t size() const pure nothrow {
         //     return 0;
         // }
@@ -546,7 +634,7 @@ static assert(uint.sizeof == 4);
         this(immutable(ubyte[]) data) {
             // In this time, Element does not parse a binary data.
             // This is lazy initialization for some efficient.
-            _data = data;
+            this.data = data;
         }
 
         enum KEY_POS = Type.sizeof + keyLen.sizeof;
@@ -559,47 +647,59 @@ static assert(uint.sizeof == 4);
 
             @trusted
                 const(Value*) value() {
-                if ( isArray(type) || (type is Type.STRING ) ) {
-                    switch(type) {
-                        static foreach(E; EnumMembers!Type) {
-                            static if (!isNative(E) && isArray(E) || (E is Type.STRING) ) {
-                            case E:
+//                if ( isArray(type) || (type is Type.STRING ) ) {
+                with(Type)
+            TypeCase:
+                switch(type) {
+                    static foreach(E; EnumMembers!Type) {
+                        static if (isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
+                        case E:
+                            static if (E is Type.DOCUMENT) {
+                                immutable byte_size = *cast(uint*)(data[valuePos..valuePos+uint.sizeof].ptr);
+
+                                writefln("byte_size=%d", byte_size);
+                                writefln("data=%s", data[valuePos..valuePos+byte_size]);
+                                //   assert(0, "Set gets DOCUMENT");
+                    return new Value(Document(data[valuePos..valuePos+uint.sizeof+byte_size]));
+                            }
+                            else static if (isArray(E) || (E is Type.STRING)) {
                                 pragma(msg, "E=",E, " isArray(E)=", isArray(E));
                                 writeln( "E=",E, " isArray(E)=", isArray(E).stringof);
-
                                 alias T = Value.TypeT!E;
                                 static if ( is(T: U[], U) ) {
                                     immutable birary_array_pos = valuePos+uint.sizeof;
-                                    immutable byte_size = *cast(uint*)(_data[valuePos..birary_array_pos].ptr);
+                                    immutable byte_size = *cast(uint*)(data[valuePos..birary_array_pos].ptr);
                                     immutable len = byte_size / U.sizeof;
-//                            Value* result;
-//                            static if (isArray(E)) {
-                                    return new Value((cast(immutable(U)*)(_data[birary_array_pos..$].ptr))[0..len]);
-                                    // }
-                                    // else {
-                                    //     result = (cast(T*)(_data[birary_array_pos..$].ptr))[0..len];
-                                    // }
-
+                                    return new Value((cast(immutable(U)*)(data[birary_array_pos..$].ptr))[0..len]);
+//                                }
                                 }
-                                goto default;
                             }
+                            break TypeCase;
                         }
-                    default:
-                        .check(0, format("Invalid type %s", type));
+                    }
+                default:
+                    if (isHiBONType(type)) {
+                        return cast(Value*)(data[valuePos..$].ptr);
                     }
                 }
-                else {
-                    return cast(Value*)(_data[valuePos..$].ptr);
-                }
+                    .check(0, format("Invalid type %s", type));
+
                 assert(0);
             }
 
 
-            T get(T)() {
-                enum E = Value.asType!T;
+            auto by(Type E)() {
                 .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
                 .check(E !is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
                 return value.get!E;
+
+            }
+
+            T get(T)() {
+                enum E = Value.asType!T;
+                // .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
+                // .check(E !is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
+                return by!E;
             }
 
             /**
@@ -630,22 +730,22 @@ static assert(uint.sizeof == 4);
 
         @property @safe const pure nothrow {
             bool isEod() {
-                return _data.length == 0;
+                return data.length == 0;
             }
 
             Type type() {
                 if (isEod) {
                     return Type.NONE;
                 }
-                return cast(Type)(_data[0]);
+                return cast(Type)(data[0]);
             }
 
             ubyte keyLen() {
-                return cast(Type)(_data[Type.sizeof]);
+                return cast(Type)(data[Type.sizeof]);
             }
 
             string key() {
-                return cast(string)_data[KEY_POS..valuePos];
+                return cast(string)data[KEY_POS..valuePos];
             }
 
             /*
@@ -673,12 +773,7 @@ static assert(uint.sizeof == 4);
                     switch(type) {
                         static foreach(E; EnumMembers!Type) {
                         case E:
-                            static if (E is DOCUMENT) {
-                                immutable document_pos = valuePos+uint.sizeof;
-                                immutable byte_size = *cast(uint*)(_data[valuePos..document_pos].ptr);
-                                return byte_size;
-                            }
-                            else static if (isHiBONType(E)) {
+                            static if (isHiBONType(E)) {
                                 alias T = Value.TypeT!E;
                                 static if ( isArray(E) || (E is STRING) ) {
                                     static if (isNative(E)) {
@@ -686,9 +781,15 @@ static assert(uint.sizeof == 4);
                                     }
                                     else {
                                         immutable binary_array_pos = valuePos+uint.sizeof;
-                                        immutable byte_size = *cast(uint*)(_data[valuePos..binary_array_pos].ptr);
+                                        immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
                                         return binary_array_pos + byte_size;
                                     }
+                                }
+                                else static if (E is DOCUMENT) {
+                                    pragma(msg, "Move this into isArray if");
+                                        immutable binary_array_pos = valuePos+uint.sizeof;
+                                        immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
+                                        return binary_array_pos + byte_size;
                                 }
                                 else {
                                     return valuePos + T.sizeof;
@@ -721,11 +822,13 @@ static assert(uint.sizeof == 4);
             */
             @trusted
                 ErrorCode valid() {
+                        enum MIN_ELEMENT_SIZE = Type.sizeof + ubyte.sizeof + char.sizeof + uint.sizeof;
+
                 with(ErrorCode) {
                     if ( type is Type.DOCUMENT ) {
                         return DOCUMENT_TYPE;
                     }
-                    if ( _data.length < MIN_ELEMENT_SIZE ) {
+                    if ( data.length < MIN_ELEMENT_SIZE ) {
                         return TOO_SMALL;
                     }
                 TypeCase:
@@ -740,12 +843,12 @@ static assert(uint.sizeof == 4);
                     default:
                         return INVALID_TYPE;
                     }
-                    if ( size < _data.length ) {
+                    if ( size < data.length ) {
                         return OVERFLOW;
                     }
                     if ( isArray(type) ) {
                         immutable binary_array_pos = valuePos+uint.sizeof;
-                        immutable byte_size = *cast(uint*)(_data[valuePos..binary_array_pos].ptr);
+                        immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
                         switch(type) {
                             static foreach(E; EnumMembers!Type) {
                                 static if ( isArray(E) && !isNative(E) ) {
@@ -871,7 +974,7 @@ static assert(uint.sizeof == 4);
                 if (isEod) {
                     return Type.NONE;
                 }
-                return cast(Type)_data[0];
+                return cast(Type)data[0];
             }
 
         }
@@ -931,10 +1034,10 @@ static assert(uint.sizeof == 4);
                 if (isEod) {
                     return null;
                 }
-                immutable k = cast(string)_data[1..$];
+                immutable k = cast(string)data[1..$];
                 // immutable strsize=strlen(k.ptr);
                 // immutable len=(strsize<k.length)?strsize:k.length;
-                immutable len=_data[0];
+                immutable len=data[0];
                 return k[0..len];
             }
 
@@ -968,7 +1071,7 @@ static assert(uint.sizeof == 4);
                 if (isEod) {
                     return null;
                 }
-                return _data[1 + key.length..size];
+                return data[1 + key.length..size];
             }
 
             /+
@@ -1256,7 +1359,7 @@ static assert(uint.sizeof == 4);
             if (s != other.size) {
                 return false;
             }
-            return _data[0..s] == other._data[0..s];
+            return data[0..s] == other.data[0..s];
         }
 
         version(none) {
@@ -1372,7 +1475,7 @@ static assert(uint.sizeof == 4);
                         result ~= "/" ~ re.field[0] ~ "/" ~ re.field[1];
                         break;
                     case NATIVE_DOCUMENT:
-                        result ~= "NativeDoc("~_data.length.to!string~")";
+                        result ~= "NativeDoc("~data.length.to!string~")";
                         break;
                     case NATIVE_STRING_ARRAY:
                         assert(0, "Not implemented");
@@ -1468,7 +1571,7 @@ static assert(uint.sizeof == 4);
             // }
 
             @trusted uint bodySize() {
-                return *cast(uint*)(_data[1 + key.length..$].ptr);
+                return *cast(uint*)(data[1 + key.length..$].ptr);
             }
         }
 
