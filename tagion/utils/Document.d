@@ -4,6 +4,8 @@
  */
 module tagion.utils.Document;
 
+import std.stdio;
+
 import std.format;
 import std.meta : AliasSeq, Filter;
 import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs, EnumMembers, Unqual;
@@ -120,39 +122,6 @@ static assert(uint.sizeof == 4);
         }
     }
 
-    version(none)
-    string toText(string INDENT="  ", string EOL="\n")() const {
-        enum BETWEEN=","~EOL;
-        string object_toText(Document doc, const Type type, immutable(string) indent=null) @safe {
-            string buf;
-            bool any=false;
-            immutable bool array=(type == Type.ARRAY);
-            buf ~=indent;
-            buf =(array)?"[":"{";
-            string lines(Range)(Range range, immutable(string) indent, immutable(string) separator=EOL) @safe {
-                if ( !range.empty) {
-                    const e=range.front;
-                    range.popFront;
-                    if ( e.isDocument ) {
-                        return format("%s%s%s : %s", separator, indent, e.key, object_toText(e.get!Document, e.type, indent))~
-                            lines(range, indent, BETWEEN);
-
-                    }
-                    else {
-                        return format("%s%s%s : (%s)%s", separator, indent, e.key, e.typeString, e.toInfo) ~
-                            lines(range, indent, BETWEEN);
-                    }
-                }
-                return "\n";
-            }
-            buf~=lines(doc[], indent~INDENT);
-            buf ~=indent;
-            buf ~= (array)?"]":"}";
-            return buf;
-        }
-        return object_toText(this, Type.DOCUMENT);
-    }
-
     @safe
     struct Range {
         immutable(ubyte[]) data;
@@ -262,11 +231,43 @@ static assert(uint.sizeof == 4);
         }
     }
 
-    unittest {
-        import std.typecons : Tuple, isTuple;
-        auto buffer=new ubyte[0x200];
+    RangeT!U range(T : U[], U)() const { //if(!isBasicType(U)) {
+        return RangeT!U(data);
+    }
 
-        size_t make(R)(ref ubyte[] buffer, R range, size_t count=size_t.max) if (isTuple!R) {
+    @safe struct RangeT(T) {
+        Range range;
+        this(immutable(ubyte)[] data) {
+            range = Range(data);
+        }
+
+        @property {
+            bool empty() const {
+                return range.empty;
+            }
+
+            void popFront() {
+                range.popFront;
+            }
+
+            const(T) front() const {
+                return range.front.get!T;
+            }
+
+            string key() const {
+                return range.front.key;
+            }
+
+            uint  index() const {
+                return range.front.index;
+            }
+        }
+    }
+
+    version(unittest) {
+        import std.typecons : Tuple, isTuple;
+
+        static private size_t make(R)(ref ubyte[] buffer, R range, size_t count=size_t.max) if (isTuple!R) {
             size_t index;
             buffer.binwrite(uint.init, &index);
             foreach(i, t; range) {
@@ -285,6 +286,11 @@ static assert(uint.sizeof == 4);
             buffer.binwrite(size, 0);
             return index;
         }
+    }
+
+    unittest {
+        auto buffer=new ubyte[0x200];
+
 
         { // Test of null document
             const doc = Document(null);
@@ -381,9 +387,11 @@ static assert(uint.sizeof == 4);
 
                     assert(e.type is E);
                     assert(e.isType!U);
+
+                    assert(e.isThat!isBasicType);
                 }
             }
-//            Type
+
             { // Document which includes basic arrays and string
                 index = make(buffer, test_tabel_array);
                 immutable data = buffer[0..index].idup;
@@ -394,6 +402,11 @@ static assert(uint.sizeof == 4);
                     const v = doc[name].get!U;
                     assert(v.length is test_tabel_array[i].length);
                     assert(v == test_tabel_array[i]);
+                    import traits=std.traits; // : isArray;
+                    const e = doc[name];
+                    writefln("e.key=%s e.isThat!isArray=%s", e.key, e.isThat!(traits.isArray));
+                    assert(!e.isThat!isBasicType);
+                    assert(e.isThat!(traits.isArray));
 
                 }
             }
@@ -409,7 +422,10 @@ static assert(uint.sizeof == 4);
                 buffer.binwrite(uint.init, &index);
                 enum doc_name="doc";
 
+                immutable index_before=index;
                 build(buffer, Type.INT32, Type.INT32.stringof, int(42), index);
+                immutable data_int32 = buffer[index_before..index].idup;
+
                 build(buffer, Type.DOCUMENT, doc_name, sub_doc, index);
                 build(buffer, Type.STRING, Type.STRING.stringof, "Text", index);
 
@@ -461,10 +477,46 @@ static assert(uint.sizeof == 4);
                         assert(e.get!U == test_tabel[i]);
                     }
                 }
+
+                { // Check opEqual
+                    const data_int32_e = Element(data_int32);
+                    assert(doc[Type.INT32.stringof] == data_int32_e);
+                }
             }
 
+            { // Test opCall!(string[])
+                index = 0;
+                uint size;
+                buffer.binwrite(uint.init, &index);
+                auto texts=["Text1", "Text2", "Text3"];
+                foreach(i, text; texts) {
+                    build(buffer, Type.STRING, i.to!string, text, index);
+                }
+                buffer.binwrite(Type.NONE, &index);
+                size = cast(uint)(index - uint.sizeof);
+                buffer.binwrite(size, 0);
+
+                immutable data = buffer[0..index].idup;
+                const doc=Document(data);
+
+                auto typed_range = doc.range!(string[])();
+                import std.stdio;
+                foreach(i, text; texts) {
+                    writefln("value=%s %s", typed_range.front, typed_range.range.front.key);
+                    assert(!typed_range.empty);
+                    assert(typed_range.key == i.to!string);
+                    assert(typed_range.index == i);
+                    assert(typed_range.front == text);
+                    typed_range.popFront;
+//                    build(buffer, Type.STRING, i.to!string, text, index);
+                }
+
+//                build(buffer, Type.DOCUMENT, doc_name, sub_doc, index);
+
+            }
         }
     }
+
 
 /**
  * HiBON element representation
@@ -567,6 +619,12 @@ static assert(uint.sizeof == 4);
                 }
                 return false;
             }
+
+            uint index() {
+                uint result;
+                .check(is_index(key, result), format("Key '%s' is not an index", key));
+                return result;
+            }
         }
 
         @property const pure nothrow {
@@ -588,19 +646,6 @@ static assert(uint.sizeof == 4);
             string key() {
                 return cast(string)data[KEY_POS..valuePos];
             }
-
-            /*
-              bool isIndex() {
-              return len is 0;
-              }
-            */
-
-/*
-  uint index() {
-  .check(isIndex, "This a key not an index");
-  return
-  }
-*/
 
             uint valuePos() {
                 return KEY_POS+keyLen;
@@ -710,13 +755,16 @@ static assert(uint.sizeof == 4);
                alias That(T) = ...;
             */
             bool isThat(alias That)() {
+            TypeCase:
                 switch(type) {
                     static foreach(E; EnumMembers!Type) {
-                        static if (isHiBONType!E) {
-                        case E:
+                    case E:
+                        static if (isHiBONType(E)) {
+                            pragma(msg, E);
                             alias T = Value.TypeT!E;
                             return That!T;
                         }
+                        break TypeCase;
                     }
                 default:
                     // empty
@@ -725,69 +773,13 @@ static assert(uint.sizeof == 4);
             }
         }
 
-
-        // bool isType(T)() pure const nothrow {
-        //     enum expectedType=Value.asType!T;
-        //     if ( expectedType is Type.NONE ) {
-        //         return false;
-        //     }
-        //     return (type is expectedType);
-        // }
-
-        /*
-          T get(T)() const if (is(T==string)) {
-          return cast(string)value[4..$];
-          }
-        */
-        version(none) {
-            alias BasicTypes=Filter!(isBasicType, ValueSeqBasicTypes);
-
-            T get(T)() const if (isOneOf!(T, BasicTypes )) {
-                check_type(TypeEnum!(T));
-                return fromValue!T;
-            }
-
-            enum isBasicArrayType(T) = is(T:U[],U) && isBasicType!U;
-            alias BasicArrayType      = Filter!(isBasicArrayType, DTypes);
-
-            T get(T)() const if (isOneOf!(T, BasicArrayType)) {
-
-                immutable buf=binary_buffer;
-                .check(buf.length % U.sizeof == 0, format("The size of binary subtype '%s' should be a mutiple of %d but is %d", subtype, U.sizeof, buf.length));
-
-            }
-        }
-        version(none) {
-
-            T[] toArray(T)() const {
-                .check(isArray, format("ARRAY type expected not %s", typeString));
-                auto doc=get!Document;
-                auto last_index=doc.indices.maxElement;
-                auto array=new T[last_index+1];
-                uint previous_index;
-                foreach(e; doc[]) {
-                    immutable current_index=e.index;
-                    .check((previous_index is 0) || (previous_index < current_index), format("Index of an Array should be ordred @index %d next %d", previous_index, current_index));
-
-                    array[current_index]=e.get!T;
-                    previous_index=current_index;
-                }
-                return array;
-            }
-
-
-        }
-
-
         @safe
         bool opEquals(ref const Element other) const {
             immutable s = size;
-            if (s != other.size) {
+            if (s !is other.size) {
                 return false;
             }
             return data[0..s] == other.data[0..s];
         }
-
     }
-
 }

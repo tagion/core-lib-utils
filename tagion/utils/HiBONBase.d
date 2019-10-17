@@ -100,22 +100,18 @@ bool isArray(Type type) pure nothrow {
 
 @safe
 bool isHiBONType(Type type) pure nothrow {
-    with(Type) {
-        switch(type) {
+    bool[] make_flags() {
+        bool[] str;
+        str.length = ubyte.max+1;
+        with(Type) {
             static foreach(E; EnumMembers!Type) {
-            case E:
-                static if (isNative(E) || (E is NONE) || (E is DEFINED_ARRAY)) {
-                    return false;
-                }
-                else {
-                    return true;
-                }
+                str[E]=(!isNative(E) && (E !is NONE) && (E !is DEFINED_ARRAY));
             }
-        default:
-            // empty
         }
+        return str;
     }
-    return false;
+    enum flags = make_flags;
+    return flags[type];
 }
 
 /*
@@ -472,7 +468,7 @@ unittest { // Check is_key_valid
     assert(!is_key_valid(text));
     text=[0x80]; // Only simple ASCII
     assert(!is_key_valid(text));
-    text="\""; // Double quote
+    text=[char(34)]; // Double quote
     assert(!is_key_valid(text));
     text="'"; // Sigle quote
     assert(!is_key_valid(text));
