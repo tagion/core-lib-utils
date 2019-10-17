@@ -14,17 +14,7 @@ import tagion.Types : decimal_t;
 import tagion.Base : isOneOf;
 import tagion.utils.HiBONBase;
 
-
-//import std.stdio;
-
-import tagion.utils.Miscellaneous : toHexString;
-//import tagion.TagionExceptions : Check, TagionException;
-
-//public alias HBSON=BSON!(true,true);
-
 static assert(uint.sizeof == 4);
-
-
 
 @safe struct Document {
     protected alias Value=ValueT!(false, void, Document);
@@ -41,14 +31,9 @@ static assert(uint.sizeof == 4);
     }
 
     @trusted
-    void copy(ref Document doc) {
+    void copy(ref const Document doc) {
         emplace(&this, doc);
     }
-    /*
-      Document idup() const nothrow {
-      return Document(data.idup);
-      }
-    */
 
     @property nothrow pure const {
         @safe bool empty() {
@@ -168,37 +153,13 @@ static assert(uint.sizeof == 4);
         return object_toText(this, Type.DOCUMENT);
     }
 
-    version(none)
-    unittest { // isInOrder
-        void build(B)(B bson) {
-            auto obj=new B;
-            obj["a"]=7;
-            obj["b"]=8;
-            bson["banana"]=1;
-            bson["orange"]=obj;
-            bson["apple"]=3;
-        }
-        //auto hbson=new HBSON;
-        auto bson=new BSON!(false, false);
-        build(bson);
-
-        assert(!Document(bson.serialize).isInOrder);
-        auto hbson=new HBSON;
-        build(hbson);
-        // writefln("hbson is inOrder=%s", Document(hbson.serialize).isInOrder);
-        assert(Document(hbson.serialize).isInOrder);
-
-    }
-
+    @safe
     struct Range {
         immutable(ubyte[]) data;
     protected:
         size_t            _index;
         Element           _element;
-
-
     public:
-        @safe
         this(immutable(ubyte[]) data) {
             this.data = data;
 
@@ -215,7 +176,7 @@ static assert(uint.sizeof == 4);
             this(doc.data);
         }
 
-        @property @safe pure nothrow const {
+        @property pure nothrow const {
             bool empty() {
                 return _index >= data.length;
             }
@@ -245,7 +206,6 @@ static assert(uint.sizeof == 4);
         return Range(data);
     }
 
-    //  version(none) {
     auto keys() const {
         return map!"a.key"(Range(data));
     }
@@ -285,7 +245,6 @@ static assert(uint.sizeof == 4);
 
     alias serialize=data;
 
-    //  version(unittest) {
     static void build(T)(ref ubyte[] buffer, Type type, string key, T x, ref size_t index) {
         buffer.binwrite(type, &index);
         buffer.binwrite(cast(ubyte)(key.length), &index);
@@ -296,11 +255,7 @@ static assert(uint.sizeof == 4);
             buffer.array_write(x, index);
         }
         else static if (is(T : const Document)) {
-            //immutable size=cast(uint)(x.data.length);
-            //writefln("size=%d", size);
-            //buffer.binwrite(size, &index);
             buffer.array_write(x.data, index);
-
         }
         else {
             buffer.binwrite(x, &index);
@@ -449,14 +404,8 @@ static assert(uint.sizeof == 4);
                 uint size;
                 buffer.binwrite(uint.init, &index);
                 enum doc_name="doc";
-//                build(buffer, Type.DOCUMENT, doc_name, data_sub_doc, index);
-//                size_t index_size;
-                //              buffer.binwrite(uint.init, &index);
-                //   index_size = index;
+
                 build(buffer, Type.INT32, Type.INT32.stringof, int(42), index);
-//                size = cast(uint)(size - index);
-                //              buffer.write(size, index_size);
-//                build(buffer, Type.DOCUMENT, doc_name, sub_doc, index);
                 build(buffer, Type.DOCUMENT, doc_name, sub_doc, index);
                 build(buffer, Type.STRING, Type.STRING.stringof, "Text", index);
 
@@ -484,7 +433,7 @@ static assert(uint.sizeof == 4);
                     assert(text == string_e.by!(Type.STRING));
                 }
 
-                {
+                { // Check the sub/under document
                     const under_e = doc[doc_name];
                     assert(under_e.key == doc_name);
                     assert(under_e.type == Type.DOCUMENT);
@@ -506,76 +455,17 @@ static assert(uint.sizeof == 4);
 
                         auto e_in = name in doc;
                         assert(e.get!U == test_tabel[i]);
-
-//                writefln("%s", e);
-
                     }
                 }
             }
 
         }
     }
-//    alias build(T)(ref ubyte[] buffer, ref size_t index, string key, T x) = build(buffer, index, Value
-//}
-/*
-  string toString() const {
-  if (empty) {
-  return "{}";
-  }
-  return "";
-  }
-  }
-
-*/
-
-    version(none) {
-        unittest {
-            // {foo: "bar", bool: true, num: 10}
-            immutable ubyte[] data = [0x22, 0x00, 0x00, 0x00, 0x02, 0x66, 0x6f, 0x6f, 0x00, 0x04, 0x00, 0x00, 0x00, 0x62, 0x61, 0x72, 0x00,
-                0x08, 0x62, 0x6f, 0x6f, 0x6c, 0x00, 0x01, 0x10, 0x6e, 0x75, 0x6d, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00];
-            auto doc = Document(data);
-
-            { // hasElement
-                assert(doc.hasElement("bool"));
-                assert(doc.hasElement("foo"));
-                assert(doc.hasElement("num"));
-                assert(!doc.hasElement("missing"));
-            }
-            { // opSlice
-                auto range = doc[];
-                assert(count(range) == 3);
-            }
-            { // keys
-                assert(equal(doc.keys, ["foo", "bool", "num"]));
-            }
-            { // opIndex([])
-                auto strElem = doc["foo"];
-                assert(strElem.str == "bar");
-
-                auto numElem = doc["num"];
-                assert(numElem.get!int == 10);
-                assert(numElem.get!(const(int)) == 10);
-                assert(numElem.get!(immutable(int)) == 10);
-                // assert(numElem.get!uint == 10);
-                // assert(numElem.get!(const(uint)) == 10);
-                // assert(numElem.get!(immutable(uint)) == 10);
-
-                auto boolElem = doc["bool"];
-                assert(boolElem.get!bool);
-
-                // Typedef check
-                alias NewInt=Typedef!int;
-                assert(numElem.get!NewInt == 10);
-
-            }
-        }
-    }
 
 /**
- * BSON element representation
+ * HiBON element representation
  */
-    @safe
-    struct Element {
+    @safe struct Element {
         /*
          * -----
          * //data image:
@@ -590,9 +480,6 @@ static assert(uint.sizeof == 4);
          *
          */
         immutable(ubyte[]) data;
-        // size_t size() const pure nothrow {
-        //     return 0;
-        // }
     public:
         this(immutable(ubyte[]) data) {
             // In this time, Element does not parse a binary data.
@@ -608,11 +495,9 @@ static assert(uint.sizeof == 4);
                 return type is E;
             }
 
-            @trusted
-                const(Value*) value() {
-//                if ( isArray(type) || (type is Type.STRING ) ) {
+            @trusted const(Value*) value() {
                 with(Type)
-            TypeCase:
+                TypeCase:
                 switch(type) {
                     static foreach(E; EnumMembers!Type) {
                         static if (isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
@@ -644,7 +529,6 @@ static assert(uint.sizeof == 4);
                 assert(0);
             }
 
-
             auto by(Type E)() {
                 .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
                 .check(E !is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
@@ -654,8 +538,6 @@ static assert(uint.sizeof == 4);
 
             T get(T)() {
                 enum E = Value.asType!T;
-                // .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
-                // .check(E !is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
                 return by!E;
             }
 
@@ -681,11 +563,9 @@ static assert(uint.sizeof == 4);
                 }
                 return false;
             }
-
-
         }
 
-        @property @safe const pure nothrow {
+        @property const pure nothrow {
             bool isEod() {
                 return data.length == 0;
             }
@@ -732,7 +612,7 @@ static assert(uint.sizeof == 4);
                         case E:
                             static if (isHiBONType(E)) {
                                 alias T = Value.TypeT!E;
-                                static if ( isArray(E) || (E is STRING) ) {
+                                static if ( isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
                                     static if (isNative(E)) {
                                         return 0;
                                     }
@@ -742,12 +622,14 @@ static assert(uint.sizeof == 4);
                                         return binary_array_pos + byte_size;
                                     }
                                 }
+                                /*
                                 else static if (E is DOCUMENT) {
                                     pragma(msg, "Move this into isArray if");
                                         immutable binary_array_pos = valuePos+uint.sizeof;
                                         immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
                                         return binary_array_pos + byte_size;
                                 }
+                                */
                                 else {
                                     return valuePos + T.sizeof;
                                 }
