@@ -3,6 +3,7 @@
  *
  */
 module tagion.utils.Document;
+import std.stdio;
 
 import std.format;
 import std.meta : AliasSeq, Filter;
@@ -40,7 +41,6 @@ static assert(uint.sizeof == 4);
             return data.length < 5;
         }
 
-
         @trusted uint size() {
             return *cast(uint*)(data[0..uint.sizeof].ptr);
         }
@@ -48,6 +48,7 @@ static assert(uint.sizeof == 4);
 
     @trusted
     @property uint length() const {
+
         uint counter;
         foreach(e; this[]) {
             counter++;
@@ -212,10 +213,35 @@ static assert(uint.sizeof == 4);
 
     alias serialize=data;
 
-    static void build(T)(ref ubyte[] buffer, Type type, string key, T x, ref size_t index) {
+    static size_t sizeKey(string key) pure nothrow {
+        return Type.sizeof + ubyte.sizeof + key.length;
+    }
+
+    static size_t sizeT(T)(Type type, string key, const(T) x) pure nothrow {
+        size_t size = sizeKey(key);
+        static if ( is(T: U[], U) ) {
+            size += uint.sizeof + (x.length*U.sizeof);
+        }
+        else static if(is(T : const Document)) {
+            size += x.data.length;
+        }
+        else {
+            size += T.sizeof;
+        }
+        return size;
+    }
+
+    static void buildKey(ref ubyte[] buffer, Type type, string key, ref size_t index) pure {
         buffer.binwrite(type, &index);
         buffer.binwrite(cast(ubyte)(key.length), &index);
         buffer.array_write(key, index);
+    }
+
+    static void build(T)(ref ubyte[] buffer, Type type, string key, const(T) x, ref size_t index) pure {
+        buildKey(buffer, type, key, index);
+        // buffer.binwrite(type, &index);
+        // buffer.binwrite(cast(ubyte)(key.length), &index);
+        // buffer.array_write(key, index);
         static if ( is(T: U[], U) ) {
             immutable size=cast(uint)(x.length*U.sizeof);
             buffer.binwrite(size, &index);
@@ -360,6 +386,7 @@ static assert(uint.sizeof == 4);
                 index = make(buffer, test_tabel, 1);
                 immutable data = buffer[0..index].idup;
                 const doc=Document(data);
+//                writefln("doc.length=%d", doc.length);
                 assert(doc.length is 1);
                 assert(doc[Type.FLOAT32.stringof].get!float == test_tabel[0]);
             }
@@ -579,7 +606,7 @@ static assert(uint.sizeof == 4);
             auto by(Type E)() {
                 .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
                 .check(E !is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
-                return value.get!E;
+                return value.by!E;
 
             }
 
@@ -642,11 +669,9 @@ static assert(uint.sizeof == 4);
                 return KEY_POS+keyLen;
             }
 
-            @trusted
-                size_t size() {
+            @trusted size_t size() {
                 with(Type) {
                 TypeCase:
-
                     switch(type) {
                         static foreach(E; EnumMembers!Type) {
                         case E:
@@ -675,7 +700,7 @@ static assert(uint.sizeof == 4);
                         // empty
                     }
                 }
-                assert(0, format("Bad type %s", type));
+                assert(0, format("Bad type %s", type.to!string));
             }
 
             enum ErrorCode {

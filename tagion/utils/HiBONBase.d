@@ -14,10 +14,11 @@ import bin = std.bitmanip;
 
 alias binread(T, R) = bin.read!(T, Endian.littleEndian, R);
 
-void binwrite(T, R, I)(R range, const T value, I index) {
-    bin.write!(T, Endian.littleEndian, R)(range, value, index);
+void binwrite(T, R, I)(R range, const T value, I index) pure {
+    import std.typecons : TypedefType;
+    alias BaseT=TypedefType!(T);
+    bin.write!(BaseT, Endian.littleEndian, R)(range, cast(BaseT)value, index);
 }
-//alias binwrite(T, R) = bin.write!(T, Endian.littleEndian, R);
 
 /**
  * Exception type used by tagion.utils.BSON module
@@ -78,7 +79,7 @@ alias utc_t = Typedef!(ulong, ulong.init, Type.UTC.stringof);
 @safe
 bool isNative(Type type) pure nothrow {
     with(Type) {
-        return ((type & DEFINED_NATIVE) !is 0);
+        return ((type & DEFINED_NATIVE) !is 0) && (type !is DEFINED_NATIVE);
     }
 }
 
@@ -103,7 +104,7 @@ bool isHiBONType(Type type) pure nothrow {
         str.length = ubyte.max+1;
         with(Type) {
             static foreach(E; EnumMembers!Type) {
-                str[E]=(!isNative(E) && (E !is NONE) && (E !is DEFINED_ARRAY));
+                str[E]=(!isNative(E) && (E !is NONE) && (E !is DEFINED_ARRAY) && (E !is DEFINED_NATIVE));
             }
         }
         return str;
@@ -112,6 +113,14 @@ bool isHiBONType(Type type) pure nothrow {
     return flags[type];
 }
 
+static unittest {
+    with(Type) {
+        static assert(!isHiBONType(NONE));
+        static assert(!isHiBONType(DEFINED_ARRAY));
+        static assert(!isHiBONType(DEFINED_NATIVE));
+    }
+
+}
 /*
   static unittest {
   with(Type) {
@@ -196,7 +205,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     }
 
     @trusted
-    auto get(Type type)() pure const {
+    auto by(Type type)() pure const {
         enum code=GetFunctions!("", true, __traits(allMembers, ValueT));
 //        pragma(msg, code);
         mixin(code);
@@ -282,7 +291,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         }
     }
 
-    alias TypeT(Type aType) = typeof(get!aType());
+    alias TypeT(Type aType) = typeof(by!aType());
 
     uint size(Type E)() const pure nothrow {
         pragma(msg, "Size ", E, " : ", isHiBONType(E));
@@ -292,7 +301,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
                 return T.sizeof;
             }
             else static if ( is(T: U[], U) && isBasicValueType!U ) {
-                return cast(uint)(get!(E).length * U.sizeof);
+                return cast(uint)(by!(E).length * U.sizeof);
             }
             else {
                 static assert(0, format("Type %s of %s is not defined", E, T.stringof));
@@ -325,7 +334,7 @@ unittest {
             v=test_tabel[i];
             alias U = test_tabel.Types[i];
             enum E  = Value.asType!U;
-            assert(test_tabel[i] == v.get!E);
+            assert(test_tabel[i] == v.by!E);
         }
     }
 
@@ -334,7 +343,7 @@ unittest {
         utc_t time = 1234;
         Value v;
         v = time;
-        assert(v.get!(Type.UTC) == 1234);
+        assert(v.by!(Type.UTC) == 1234);
         alias U = Value.TypeT!(Type.UTC);
         static assert(is(U == const utc_t));
         static assert(!is(U == const ulong));
@@ -361,9 +370,9 @@ unittest {
             alias U = test_tabel.Types[i];
             enum  E = Value.asType!U;
             static assert(is(const U == Value.TypeT!E));
-            assert(t == v.get!E);
-            assert(t.length == v.get!E.length);
-            assert(t is v.get!E);
+            assert(t == v.by!E);
+            assert(t.length == v.by!E.length);
+            assert(t is v.by!E);
         }
     }
 }
