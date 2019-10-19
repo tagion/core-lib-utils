@@ -414,6 +414,8 @@ ubyte[] fromHex(in string hex) pure nothrow {
         import std.stdio;
         import std.conv : to;
         import std.typecons : Tuple, isTuple;
+        // Note that the keys are in alphabetic order
+        // Because the HiBON keys must be ordered
         alias Tabel = Tuple!(
             bool,   Type.BOOLEAN.stringof,
             float,  Type.FLOAT32.stringof,
@@ -434,17 +436,18 @@ ubyte[] fromHex(in string hex) pure nothrow {
         test_tabel.UINT64   = 0x0123_3456_789A_BCDF;
         test_tabel.BOOLEAN  = true;
 
+        // Note that the keys are in alphabetic order
+        // Because the HiBON keys must be ordered
         alias TabelArray = Tuple!(
             immutable(ubyte)[],  Type.BINARY.stringof,
+            immutable(bool)[],   Type.BOOLEAN_ARRAY.stringof,
             immutable(float)[],  Type.FLOAT32_ARRAY.stringof,
             immutable(double)[], Type.FLOAT64_ARRAY.stringof,
             immutable(int)[],    Type.INT32_ARRAY.stringof,
             immutable(long)[],   Type.INT64_ARRAY.stringof,
+            string,              Type.STRING.stringof,
             immutable(uint)[],   Type.UINT32_ARRAY.stringof,
             immutable(ulong)[],  Type.UINT64_ARRAY.stringof,
-            immutable(bool)[],   Type.BOOLEAN_ARRAY.stringof,
-            string,              Type.STRING.stringof
-
             );
         TabelArray test_tabel_array;
         test_tabel_array.BINARY        = [1, 2, 3];
@@ -521,16 +524,14 @@ ubyte[] fromHex(in string hex) pure nothrow {
             assert(e.key == Type.FLOAT32.stringof);
             assert(e.by!(Type.FLOAT32) == test_tabel[pos]);
 
-//            assert(size =
-            //  immutable data = hibon.serialize;
         }
 
-        {
+        { // HiBON Test for basic types
             auto hibon = new HiBON;
 
             string[] keys;
             foreach(i, t; test_tabel) {
-                hibon[test_tabel.fieldNames[i]] = test_tabel[i];
+                hibon[test_tabel.fieldNames[i]] = t;
                 keys~=test_tabel.fieldNames[i];
             }
 
@@ -547,8 +548,63 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 assert(m.key == key);
                 writefln("m.type =%s %s %s", m.type, key, to!string(m.type));
                 assert(m.type.to!string == key);
-                assert(m.get!(test_tabel.Types[i]) == test_tabel[i]);
+                assert(m.get!(test_tabel.Types[i]) == t);
             }
+
+            immutable data = hibon.serialize;
+            const doc = Document(data);
+
+            assert(doc.length is test_tabel.length);
+
+            foreach(i, t; test_tabel) {
+                enum key=test_tabel.fieldNames[i];
+                const e = doc[key];
+                assert(e.key == key);
+                assert(e.type.to!string == key);
+                writefln("e.key=%s e.get=%s", e.key, e.get!(test_tabel.Types[i]));
+                assert(e.get!(test_tabel.Types[i]) == t);
+            }
+        }
+
+        { // HiBON Test for array of basic types
+            auto hibon = new HiBON;
+
+            string[] keys;
+            foreach(i, t; test_tabel_array) {
+                hibon[test_tabel_array.fieldNames[i]] = t;
+                keys~=test_tabel_array.fieldNames[i];
+            }
+
+            size_t index;
+            foreach(m; hibon[]) {
+                writefln("m.key=%s keys[%d]=%s", m.key, index, keys[index]);
+                assert(m.key == keys[index]);
+                index++;
+            }
+
+            foreach(i, t; test_tabel_array) {
+                enum key=test_tabel_array.fieldNames[i];
+                const m = hibon[key];
+                assert(m.key == key);
+                writefln("m.type =%s %s %s", m.type, key, to!string(m.type));
+                assert(m.type.to!string == key);
+                assert(m.get!(test_tabel_array.Types[i]) == t);
+            }
+
+            immutable data = hibon.serialize;
+            const doc = Document(data);
+
+            assert(doc.length is test_tabel_array.length);
+
+            foreach(i, t; test_tabel_array) {
+                enum key=test_tabel_array.fieldNames[i];
+                const e = doc[key];
+                assert(e.key == key);
+                assert(e.type.to!string == key);
+                writefln("e.key=%s e.get=%s", e.key, e.get!(test_tabel_array.Types[i]));
+                assert(e.get!(test_tabel_array.Types[i]) == t);
+            }
+
         }
     }
     version(none)
