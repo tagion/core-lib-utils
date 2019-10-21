@@ -23,7 +23,7 @@ static assert(uint.sizeof == 4);
 
     @disable this();
 
-    this(immutable ubyte[] data) nothrow {
+    this(immutable ubyte[] data) pure nothrow {
         this.data = data;
     }
 
@@ -598,7 +598,7 @@ static assert(uint.sizeof == 4);
                         return cast(Value*)(data[valuePos..$].ptr);
                     }
                 }
-                    .check(0, format("Invalid type %s", type));
+                .check(0, format("Invalid type %s", type));
 
                 assert(0);
             }
@@ -678,17 +678,23 @@ static assert(uint.sizeof == 4);
                             static if (isHiBONType(E)) {
                                 alias T = Value.TypeT!E;
                                 static if ( isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
-                                    static if (isNative(E)) {
-                                        return 0;
-                                    }
-                                    else {
+                                    // static if (isNative(E)) {
+                                    //     return 0;
+                                    // }
+                                    // else {
                                         immutable binary_array_pos = valuePos+uint.sizeof;
                                         immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
                                         return binary_array_pos + byte_size;
-                                    }
+                                    // }
                                 }
                                 else {
                                     return valuePos + T.sizeof;
+                                }
+                            }
+                            else static if (isNative(E)) {
+                                static if (E is NATIVE_DOCUMENT) {
+                                    const doc = Document(data[valuePos..$]);
+                                    return valuePos + uint.sizeof + doc.size;
                                 }
                             }
                             else static if ( E is Type.NONE ) {
@@ -700,7 +706,7 @@ static assert(uint.sizeof == 4);
                         // empty
                     }
                 }
-                assert(0, format("Bad type %s", type.to!string));
+                assert(0, format("Bad type %s", type));
             }
 
             enum ErrorCode {
@@ -710,7 +716,7 @@ static assert(uint.sizeof == 4);
                 ILLEGAL_TYPE,   // Use of internal types is illegal
                 INVALID_TYPE,   // Type is not defined
                 OVERFLOW,       // The specifed data does not fit into the data stream
-                ARRAY_SIZE_BAD // The binary-array size in bytes is not a multipla of element size in the array
+                ARRAY_SIZE_BAD  // The binary-array size in bytes is not a multipla of element size in the array
             }
 
             /**

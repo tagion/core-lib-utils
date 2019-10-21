@@ -254,6 +254,13 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         }
     }
 
+    static if (!is(Document == void) && !is(HiBON == void) ) {
+        @trusted
+        this(Document doc) {
+            native_document = doc;
+        }
+    }
+
     @trusted
     this(T)(T x) if (isOneOf!(Unqual!T, typeof(this.tupleof)) && !is(T : const(Document)) ) {
         alias MutableT = Unqual!T;
@@ -275,6 +282,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
 
     @trusted
     void opAssign(T)(T x) if (isOneOf!(T, typeof(this.tupleof))) {
+        pragma(msg, "opAssign ", T);
         static foreach(m; __traits(allMembers, ValueT) ) {
             static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
                 static if ( is(T == struct) && !__traits(compiles, __traits(getMember, this, m) = x) ) {
@@ -282,7 +290,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
                     mixin(code);
                     enum MemberType=getUDAs!(member, Type)[0];
                     static assert ( MemberType !is Type.NONE, format("%s is not supported", T ) );
-                    x.copy(&__traits(getMember, this, m));
+                    x.copy(__traits(getMember, this, m));
                 }
                 else {
                     __traits(getMember, this, m) = x;
