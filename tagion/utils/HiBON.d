@@ -192,11 +192,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
 
         this(T)(T x, string key) if ( !is(T == const) ) { //const if ( is(T == const) ) {
-            import tagion.Base : isOneOf;
-            pragma(msg, "this ", T);
-            alias Tvalues = typeof(this.value.tupleof);
-            pragma(msg, "value ", Tvalues, ", ", isOneOf!(T, Tvalues) );
-            this.value.opAssign(x);
             this.value = x;
             this.type  = Value.asType!T;
             this.key  = key;
