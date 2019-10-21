@@ -310,17 +310,13 @@ ubyte[] fromHex(in string hex) pure nothrow {
                         case E:
                             alias T = Value.TypeT!E;
                             static if (E is DOCUMENT) {
-                                debug writefln("before index=%d", index);
                                 Document.buildKey(buffer, E, key, index);
                                 value.by!(E).append(buffer, index);
-                                debug writefln("after index=%d", index);
-//                                assert(0, format("Not %s implemented yet", E));
                             }
                             else static if (isNative(E)) {
                                 static if (E is NATIVE_DOCUMENT) {
                                     Document.buildKey(buffer, DOCUMENT, key, index);
                                     const doc=value.by!(E);
-                                    debug writefln("doc.size=%d", doc.size);
                                     buffer.array_write(value.by!(E).data, index);
                                 }
                                 else {
@@ -328,7 +324,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
                                 }
                             }
                             else {
-                                debug writefln("build %s %s %s index=%d", E, key, value.by!E, index);
                                 Document.build(buffer, E, key, value.by!E, index);
                             }
                             break TypeCase;
@@ -525,24 +520,15 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
             const doc_size = Document.sizeT(Type.FLOAT32, Type.FLOAT32.stringof, test_tabel[pos]);
 
-            writefln("size=%d hibon_size=%d doc_size=%d",
-                size,
-                hibon_size,
-                doc_size
-               );
-
             assert(size is hibon_size);
 
             immutable data = hibon.serialize;
-
-            writefln("data=%s", data);
 
             const doc = Document(data);
 
             assert(doc.length is 1);
             const e = doc[Type.FLOAT32.stringof];
 
-            writefln("key=%s type=%s %s", e.key, e.type, e.by!(Type.FLOAT32));
             assert(e.type is Type.FLOAT32);
             assert(e.key == Type.FLOAT32.stringof);
             assert(e.by!(Type.FLOAT32) == test_tabel[pos]);
@@ -560,7 +546,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
             size_t index;
             foreach(m; hibon[]) {
-                writefln("m.key=%s keys[%d]=%s", m.key, index, keys[index]);
                 assert(m.key == keys[index]);
                 index++;
             }
@@ -569,7 +554,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 enum key=test_tabel.fieldNames[i];
                 const m = hibon[key];
                 assert(m.key == key);
-                writefln("m.type =%s %s %s", m.type, key, to!string(m.type));
                 assert(m.type.to!string == key);
                 assert(m.get!(test_tabel.Types[i]) == t);
             }
@@ -584,7 +568,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 const e = doc[key];
                 assert(e.key == key);
                 assert(e.type.to!string == key);
-                writefln("e.key=%s e.get=%s", e.key, e.get!(test_tabel.Types[i]));
                 assert(e.get!(test_tabel.Types[i]) == t);
             }
         }
@@ -600,7 +583,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
             size_t index;
             foreach(m; hibon[]) {
-                writefln("m.key=%s keys[%d]=%s", m.key, index, keys[index]);
                 assert(m.key == keys[index]);
                 index++;
             }
@@ -609,7 +591,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 enum key=test_tabel_array.fieldNames[i];
                 const m = hibon[key];
                 assert(m.key == key);
-                writefln("m.type =%s %s %s", m.type, key, to!string(m.type));
                 assert(m.type.to!string == key);
                 assert(m.get!(test_tabel_array.Types[i]) == t);
             }
@@ -624,7 +605,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 const e = doc[key];
                 assert(e.key == key);
                 assert(e.type.to!string == key);
-                writefln("e.key=%s e.get=%s", e.key, e.get!(test_tabel_array.Types[i]));
                 assert(e.get!(test_tabel_array.Types[i]) == t);
             }
 
@@ -641,24 +621,13 @@ ubyte[] fromHex(in string hex) pure nothrow {
             immutable hibon_size_no_child = hibon.size;
             hibon[chile_name]      = hibon_child;
             hibon_child["int32"]= 42;
-            immutable hibon_child_size    = hibon_child.size;
 
+            immutable hibon_child_size    = hibon_child.size;
             immutable child_key_size = Document.sizeKey(chile_name);
             immutable hibon_size = hibon.size;
-
-
-            writefln("hibon_size_no_child=%d", hibon_size_no_child);
-            writefln("hibob_child_size=%d", hibon_child_size);
-            writefln("hibon_size=%d", hibon_size);
-            writefln("child_key_size=%d", child_key_size);
-                //child_hibon["int32"]= 42;
-
-
+            assert(hibon_size is hibon_size_no_child+child_key_size+hibon_child_size);
 
             immutable data = hibon.serialize;
-
-            writefln("data.length=%s", data.length);
-
             const doc = Document(data);
 
         }
@@ -677,26 +646,14 @@ ubyte[] fromHex(in string hex) pure nothrow {
             immutable data = hibon.serialize;
             const doc = Document(data);
 
-            writefln("hibon_no_native_document_size=%d", hibon_no_native_document_size);
-            writefln("native_doc.length=%d", native_doc.size);
-            writefln("native_data.length=%d", native_data.length);
-            writefln("native_data=%s", native_data);
-            writefln("doc.data.length=%d", doc.data.length);
-            writefln("doc.data   =%s", doc.data);
-
             {
                 const e = doc["string"];
-                writefln("e.type=%s", e.type);
-                writefln("e=%s", e.get!string);
-
                 assert(e.type is Type.STRING);
                 assert(e.get!string == "Text");
             }
 
-            {
+            { // Check native document
                 const e = doc["native"];
-                writefln("e.type=%s", e.type);
-                writefln("e=%s", e.get!Document.data);
 
                 assert(e.type is Type.DOCUMENT);
                 const sub_doc =  e.get!Document;
@@ -705,10 +662,7 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 const sub_e = sub_doc["int"];
                 assert(sub_e.type is Type.INT32);
                 assert(sub_e.get!int is 42);
-
-
             }
-//            writefln("doc.type", doc["strin
 
         }
     }
