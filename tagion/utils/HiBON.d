@@ -301,21 +301,27 @@ ubyte[] fromHex(in string hex) pure nothrow {
             with(Type) {
             foreach(i, h; value.by!E) {
                 immutable key=i.to!string;
-                static if ( (E is NATIVE_HIBON_ARRAY) || (E is NATIVE_DOCUMENT_ARRAY)) {
-                    enum ElementE = DOCUMENT;
+                // static if ( (E is NATIVE_HIBON_ARRAY) || (E is NATIVE_DOCUMENT_ARRAY)) {
+                //     enum ElementE = DOCUMENT;
+                // }
+                // else {
+                //     enum ElementE = STRING;
+                // }
+                static if (E is NATIVE_STRING_ARRAY) {
+                    Document.build(buffer, STRING, key, h, index);
                 }
                 else {
-                    enum ElementE = NONE;
-                }
-                Document.buildKey(buffer, ElementE, key, index);
-                static if (E is NATIVE_HIBON_ARRAY) {
-                    h.append(buffer, index);
-                }
-                else static if (E is NATIVE_DOCUMENT_ARRAY) {
-                    buffer.array_write(h.data, index);
-                }
-                else {
+                    Document.buildKey(buffer, DOCUMENT, key, index);
+                    static if (E is NATIVE_HIBON_ARRAY) {
+                        h.append(buffer, index);
+                    }
+                    else static if (E is NATIVE_DOCUMENT_ARRAY) {
+                        buffer.array_write(h.data, index);
+                    }
+
+                    else {
                     assert(0, format("%s is not implemented yet", E));
+                }
                 }
             }
             }
@@ -783,14 +789,9 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 auto hibon_doc_array= new HiBON;
                 hibon_doc_array["doc_array"]=docs;
 
-                writefln("hibon_doc_array.length=%d", hibon_doc_array.length);
                 assert(hibon_doc_array.length is 1);
 
-                writefln("hibon_doc_array.size=%d", hibon_doc_array.size);
                 immutable data_array=hibon_doc_array.serialize;
-                writefln("data_array.length=%d", data_array.length);
-                writefln("data_array=%s", data_array);
-
 
                 const doc_all=Document(data_array);
                 const doc_array=doc_all["doc_array"].by!(Type.DOCUMENT);
@@ -802,13 +803,34 @@ ubyte[] fromHex(in string hex) pure nothrow {
                     const e=doc_array[i]; //.get!U;
                     const doc_e=e.by!(Type.DOCUMENT);
                     const sub_e=doc_e[name];
-                    writefln("e.type=%s %s", sub_e.type, E);
                     assert(sub_e.type is E);
                     assert(sub_e.by!E == t);
                 }
 
             }
 
+        }
+
+        {  // Test of string[]
+            auto texts=["Hugo", "Vigo", "Borge"];
+            auto hibon=new HiBON;
+            hibon["texts"]=texts;
+
+            writefln("%d", hibon.size);
+            writefln("%s", hibon.serialize);
+            writefln("%s", hibon.serialize.length);
+
+            immutable data=hibon.serialize;
+            const doc=Document(data);
+            const doc_texts=doc["texts"].by!(Type.DOCUMENT);
+            writefln("doc_texts.length=%d", doc_texts.length);
+
+            assert(doc_texts.length is texts.length);
+            foreach(i, s; texts) {
+                const e=doc_texts[i];
+                assert(e.type is Type.STRING);
+                assert(e.get!string == s);
+            }
         }
     }
 
