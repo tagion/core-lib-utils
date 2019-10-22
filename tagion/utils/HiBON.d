@@ -70,89 +70,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
         _members = new Members;
     }
 
-    version(none)
-    protected void append(ref ubyte[] buffer, ref size_t index) const {
-        immutable size_index = index;
-        buffer.binwrite(uint.init, &index);
-        _members[].each!( a => a.append(buffer, index) ); //.fold!( (a, b) => (a + b) );
-        buffer.binwrite(Type.NONE, &index);
-        immutable size = cast(uint)(index - uint.sizeof);
-        buffer.binwrite(size, size_index);
-    }
-    /*
-            private static void appendNativeArray(E)(ref ubyte[] buffer, ref const(Member) member, ref size_t index) const
-            in {
-                assert(member.type is E);
-            }
-        do {
-            immutable size_index = index;
-            buffer.binwrite(uint.init, &index);
-            auto array = member.by!E;
-            with(Type) {
-            foreach(i, a; array) {
-                immutable key = i.to!string;
-                static if ( E is NATIVE_STRING_ARRAY ) {
-                    enum ElementType = STRING;
-                }
-                else {
-                    enum ElementType = DOCUMENT;
-                }
-                Document.buildKey(buffer, ElementType, key, index);
-                static if ( E is NATIVE_HIBON_ARRAY ) {
-                    a.append(buffer, index);
-                }
-                else static if ( E is NATIVE_DOCUMENT_ARRAY ) {
-                    a.array_write(a.get!(E).data, index);
-                }
-                else static if ( E is NATIVE_STRING_ARRAY ) {
-                    a.array_write(a.get!(E), index);
-                }
-                else {
-                    static assert(0, format("Unsupported array type %s", E));
-                }
-            }
-            }
-        }
-
-        private void append(ref ubyte[] buffer, ref size_t index) const {
-            immutable size_index = index;
-            buffer.binwrite(uint.init, &index);
-            foreach(m; this[]) {
-                with(Type) {
-                TypeCase:
-                    switch(m.type) {
-                        static foreach(E; EnumMembers!Type) {
-                            static if (isHiBONType(E) || isNative(E)) {
-                            case E:
-                                static if ( E is DOCUMENT ) {
-                                    m.by!DOCUMENT.append(buffer, index);
-                                }
-                                else static if (isNative(E)) {
-                                    static if (E is NATIVE_DOCUMENT) {
-                                        Document.build(buffer, DOCUMENT, m.key, m.by!E, index);
-                                    }
-                                    else {
-                                        appendNativeArray!E(buffer, n, index);
-                                    }
-                                }
-                                else {
-                                    Document.build(buffer, E, m.key, m.by!E, index);
-                                }
-                                break TypeCase;
-                            }
-                        }
-                    default:
-                        assert(0, format("Illegal type %s", type));
-                    }
-                }
-            }
-            buffer.binwrite(Type.NONE, &index);
-            immutable size = cast(uint)(index - uint.sizeof);
-            buffer.binwrite(size, size_index);
-        }
-
-    */
-
     size_t size() const pure {
         size_t result = uint.sizeof+Type.sizeof;
         if (_members.length) {
@@ -163,11 +80,9 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
     immutable(ubyte[]) serialize() const pure {
         scope buffer = new ubyte[size];
-//        scope buffer = new ubyte[0x200];
         size_t index;
         append(buffer, index);
-       return buffer.idup;
-//        return buffer[0..index].idup;
+        return buffer.idup;
     }
 
     private void append(ref ubyte[] buffer, ref size_t index) const pure {
@@ -188,25 +103,20 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
         protected this() nothrow {
             value = uint.init;
-            // empty
         }
 
-        this(T)(T x, string key) if ( !is(T == const) ) { //const if ( is(T == const) ) {
+        this(T)(T x, string key) if ( !is(T == const) ) {
             this.value = x;
             this.type  = Value.asType!T;
             this.key  = key;
         }
 
         @trusted
-        this(T)(T x, string key) const if ( is(T == const) ) { //const if ( is(T == const) ) {
+        this(T)(T x, string key) const if ( is(T == const) ) {
             static if ( is(T == class) || is(T == struct) ) {
                 alias MutableT = Unqual!T;
                 this.value = cast(MutableT)x;
             }
-            // static if ( is(T:const(Document)) ) {
-            //     pragma(msg, T);
-            //     this.value = x;
-            // }
             else {
                 this.value = x;
             }
@@ -214,12 +124,11 @@ ubyte[] fromHex(in string hex) pure nothrow {
             this.key  = key;
         }
 
-
         @trusted
         inout(HiBON) document() inout pure
-            in {
-                assert(type is Type.DOCUMENT);
-            }
+        in {
+            assert(type is Type.DOCUMENT);
+        }
         do {
             return value.document;
         }
@@ -247,37 +156,35 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 switch(type) {
                     foreach(E; EnumMembers!Type) {
                         static if(isHiBONType(E) || isNative(E)) {
-                            case E:
-                                static if ( E is Type.DOCUMENT ) {
-                                    return Document.sizeKey(key)+value.by!(E).size;
-                                }
-                                else static if ( E is NATIVE_DOCUMENT ) {
-                                    return Document.sizeKey(key)+value.by!(E).size+uint.sizeof;
-                                }
-                                else static if ( isNativeArray(E) ) {
-                                    size_t result = Document.sizeKey(key)+uint.sizeof+Type.sizeof;
-                                    // alias T = Value.TypeT!E;
-                                    //alias U = ForeachType!(T);
-                                    foreach(i, e; value.by!(E)[]) {
-                                        immutable key=i.to!string;
-                                        result += Document.sizeKey(key);
-                                        static if(E is NATIVE_HIBON_ARRAY) {
-                                            result += e.size;
-                                        }
-                                        else static if (E is NATIVE_DOCUMENT_ARRAY) {
-                                            result += uint.sizeof+e.size;
-                                        }
-                                        else static if (E is NATIVE_STRING_ARRAY) {
-                                            result += uint.sizeof+e.length;
-                                        }
+                        case E:
+                            static if ( E is Type.DOCUMENT ) {
+                                return Document.sizeKey(key)+value.by!(E).size;
+                            }
+                            else static if ( E is NATIVE_DOCUMENT ) {
+                                return Document.sizeKey(key)+value.by!(E).size+uint.sizeof;
+                            }
+                            else static if ( isNativeArray(E) ) {
+                                size_t result = Document.sizeKey(key)+uint.sizeof+Type.sizeof;
+                                foreach(i, e; value.by!(E)[]) {
+                                    immutable key=i.to!string;
+                                    result += Document.sizeKey(key);
+                                    static if(E is NATIVE_HIBON_ARRAY) {
+                                        result += e.size;
                                     }
-                                    return result;
+                                    else static if (E is NATIVE_DOCUMENT_ARRAY) {
+                                        result += uint.sizeof+e.size;
+                                    }
+                                    else static if (E is NATIVE_STRING_ARRAY) {
+                                        result += uint.sizeof+e.length;
+                                    }
                                 }
-                                else {
-                                    const v = value.by!(E);
-                                    return Document.sizeT(E, key, v);
-                                }
-                                break TypeCase;
+                                return result;
+                            }
+                            else {
+                                const v = value.by!(E);
+                                return Document.sizeT(E, key, v);
+                            }
+                            break TypeCase;
                         }
                     }
                 default:
@@ -288,7 +195,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
 
         protected void appendList(Type E)(ref ubyte[] buffer, ref size_t index)  const pure if (isNativeArray(E)) {
-//            alias U=ForeachType!(Value.TypeT!E);
             immutable size_index = index;
             buffer.binwrite(uint.init, &index);
             scope(exit) {
@@ -297,31 +203,25 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 buffer.binwrite(doc_size, size_index);
             }
             with(Type) {
-            foreach(i, h; value.by!E) {
-                immutable key=i.to!string;
-                // static if ( (E is NATIVE_HIBON_ARRAY) || (E is NATIVE_DOCUMENT_ARRAY)) {
-                //     enum ElementE = DOCUMENT;
-                // }
-                // else {
-                //     enum ElementE = STRING;
-                // }
-                static if (E is NATIVE_STRING_ARRAY) {
-                    Document.build(buffer, STRING, key, h, index);
-                }
-                else {
-                    Document.buildKey(buffer, DOCUMENT, key, index);
-                    static if (E is NATIVE_HIBON_ARRAY) {
-                        h.append(buffer, index);
+                foreach(i, h; value.by!E) {
+                    immutable key=i.to!string;
+                    static if (E is NATIVE_STRING_ARRAY) {
+                        Document.build(buffer, STRING, key, h, index);
                     }
-                    else static if (E is NATIVE_DOCUMENT_ARRAY) {
-                        buffer.array_write(h.data, index);
-                    }
-
                     else {
-                    assert(0, format("%s is not implemented yet", E));
+                        Document.buildKey(buffer, DOCUMENT, key, index);
+                        static if (E is NATIVE_HIBON_ARRAY) {
+                            h.append(buffer, index);
+                        }
+                        else static if (E is NATIVE_DOCUMENT_ARRAY) {
+                            buffer.array_write(h.data, index);
+                        }
+
+                        else {
+                            assert(0, format("%s is not implemented yet", E));
+                        }
+                    }
                 }
-                }
-            }
             }
 
         }
@@ -369,19 +269,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
     protected Members _members;
 
-    version(none)
-    void check_type(DTYPE)(string file = __FILE__, size_t line = __LINE__ ){
-        enum type_to_be_check=DtoHiBONType!DTYPE;
-        static if ( is(typeof(type_to_be_check) == BinarySubType ) ) {
-            .check(_type == Type.BINARY, format("Bad type %s expected %s", Type.BINARY, _type), file, line);
-            .check(_subtype == type_to_be_check, format("Bad sub-type %s expected %s", type_to_be_check, _subtype), file, line);
-
-        }
-        else {
-            .check(_type == type_to_be_check, format("Bad type %s expected %s", type_to_be_check, _type), file, line);
-        }
-    }
-
     auto opSlice() const {
         return _members[];
     }
@@ -397,56 +284,14 @@ ubyte[] fromHex(in string hex) pure nothrow {
         .check(!range.empty, format("Member '%s' does not exist", key) );
         return range.front;
     }
-/*
-    Value opIndex(in string key) {
-        auto range=_members.equalRange(Member.search(key)); //Member.search(key));
-        .check(!range.empty, format("Member '%s' does not exist", key) );
-        return range.front.value;
-    }
-*/
-
-    /*
-    inout(T) get(T)() inout {
-        with(Type) final switch (type) {
-                foreach (E; EnumMembers!Type) {
-                case E:
-                    alias T=ValueType!E;
-                    static if ( isOneOf!(T, NonValidDataTypes) ) {
-                        .check(0, format("Illigal HiBSON type %s", E));
-                    }
-                    else {
-                        return value!E;
-                    }
-                    break;
-                }
-            }
-        assert(0);
-    }
-    */
-    version(none) {
-
-        bool isDocument() const {
-            return (type is Type.DOCUMENT);
-        }
-
-        bool isArray() const {
-            return (type is Type.LIST);
-        }
-    }
-
 
     void append(T)(string key, T x) {
         alias BaseT=TypedefType!T;
         alias UnqualT=Unqual!BaseT;
         HiBON elm=new HiBON;
         scope(success) {
-            // elm._type=type;
-            // elm._subtype=binary_subtype;
             Member member={key : key, element : elm};
             _member.insert(member);
-            // elm._key=key;
-            // elm.members=members;
-            // members=elm;
         }
         static if ( is(UnqualT == bool) ) {
             elm._type=Type.BOOLEAN;
@@ -712,26 +557,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 local_hibon[name]=t;
                 hibon_array~=local_hibon;
             }
-            /*
-
-            {
-                auto a =new HiBON;
-                a["a"]=int(42);
-                hibon_array~=a;
-            }
-
-            {
-                auto a =new HiBON;
-                a["b"]="text";
-                hibon_array~=a;
-            }
-
-            {
-                auto a =new HiBON;
-                a["c"]=float(42.42);
-                hibon_array~=a;
-            }
-            */
             auto hibon = new HiBON;
             hibon["int"]  = int(42);
             hibon["array"]= hibon_array;
@@ -756,26 +581,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
                     assert(local_e.type is Value.asType!U);
                     assert(local_e.get!U == t);
                 }
-/*
-                {
-                    const doc_a = doc_array[0].by!(Type.DOCUMENT);
-                    const a_e = doc_a["a"];
-                    assert(a_e.type is Type.INT32);
-                    assert(a_e.get!int is 42);
-                }
-                {
-                    const doc_b = doc_array[1].by!(Type.DOCUMENT);
-                    const b_e = doc_b["b"];
-                    assert(b_e.type is Type.STRING);
-                    assert(b_e.get!string == "text");
-                }
-                {
-                    const doc_c = doc_array[2].by!(Type.DOCUMENT);
-                    const c_e = doc_c["c"];
-                    assert(c_e.type is Type.FLOAT32);
-                    assert(c_e.get!float == float(42.42));
-                }
-*/
             }
 
             { // Test of Document[]
