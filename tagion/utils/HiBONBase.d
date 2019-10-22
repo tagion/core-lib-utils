@@ -283,9 +283,10 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     @trusted
     void opAssign(T)(T x) if (isOneOf!(T, typeof(this.tupleof))) {
         pragma(msg, "opAssign ", T);
+        alias UnqualT = Unqual!T;
         static foreach(m; __traits(allMembers, ValueT) ) {
             static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
-                static if ( is(T == struct) && !__traits(compiles, __traits(getMember, this, m) = x) ) {
+                static if ( (is(T == struct) || is(T == class)) && !__traits(compiles, __traits(getMember, this, m) = x) ) {
                     enum code="alias member=ValueT."~m~";";
                     mixin(code);
                     enum MemberType=getUDAs!(member, Type)[0];
@@ -293,7 +294,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
                     x.copy(__traits(getMember, this, m));
                 }
                 else {
-                    __traits(getMember, this, m) = x;
+                    __traits(getMember, this, m) = cast(UnqualT)x;
                 }
             }
         }

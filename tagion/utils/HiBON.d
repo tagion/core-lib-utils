@@ -11,6 +11,8 @@
  */
 module tagion.utils.HiBON;
 
+            import std.stdio;
+
 //import std.datetime;   // Date, DateTime
 import std.container : RedBlackTree;
 import std.format;
@@ -19,6 +21,7 @@ import std.algorithm.iteration : map, fold, each;
 import std.traits : EnumMembers, ForeachType, Unqual, isMutable, isBasicType;
 import std.bitmanip : write;
 import std.conv : to;
+import std.typecons : TypedefType;
 
 import tagion.utils.Document;
 import tagion.utils.HiBONBase;
@@ -105,23 +108,22 @@ ubyte[] fromHex(in string hex) pure nothrow {
             value = uint.init;
         }
 
-        this(T)(T x, string key) pure if ( !is(T == const) ) {
-            this.value = x;
-            this.type  = Value.asType!T;
-            this.key  = key;
-        }
+        // this(T)(T x, string key) pure if ( is(T==Unqual!T) ) {
+        //     this.value = x;
+        //     this.type  = Value.asType!T;
+        //     this.key  = key;
+        // }
 
         @trusted
-        this(T)(T x, string key) const pure if ( is(T == const) ) {
-            static if ( is(T == class) || is(T == struct) ) {
-                alias MutableT = Unqual!T;
-                this.value = cast(MutableT)x;
-            }
-            else {
-                this.value = x;
-            }
-            this.type  = Value.asType!T;
+        this(T)(T x, string key) { //const pure if ( is(T == const) ) {
+            alias BaseT=TypedefType!T;
+            alias MutableT = Unqual!BaseT;
+            this.value = cast(MutableT)x;
+            enum E=Value.asType!MutableT;
+            static assert(E !is Type.NONE, format("Type %s is not valid", T.stringof));
+            this.type  = E;
             this.key  = key;
+
         }
 
         @trusted
@@ -155,6 +157,7 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
         @trusted
         size_t size() const pure {
+            debug writefln("size() key=%s type=%s", key, type);
             with(Type) {
             TypeCase:
                 switch(type) {
@@ -231,6 +234,7 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
 
         void append(ref ubyte[] buffer, ref size_t index) const pure {
+            debug writefln("key=%s type=%s", key, type);
             with(Type) {
             TypeCase:
                 switch(type) {
@@ -645,4 +649,11 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
     }
 
+    unittest {
+        auto hibon=new HiBON;
+        immutable int x=42;
+        hibon["int"]=x;
+        const m=hibon["int"];
+        writefln("m.type=%s", m.type);
+    }
 }

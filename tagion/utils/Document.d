@@ -23,7 +23,7 @@ static assert(uint.sizeof == 4);
 
     @disable this();
 
-    this(immutable ubyte[] data) pure nothrow {
+    this(immutable(ubyte[]) data) pure nothrow {
         this.data = data;
     }
 
@@ -610,7 +610,7 @@ static assert(uint.sizeof == 4);
 
             }
 
-            T get(T)() {
+            T get(T)() const {
                 enum E = Value.asType!T;
                 return by!E;
             }
