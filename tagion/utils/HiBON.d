@@ -168,7 +168,7 @@ ubyte[] fromHex(in string hex) pure nothrow {
 //        scope buffer = new ubyte[0x200];
         size_t index;
         append(buffer, index);
-        return buffer.idup;
+       return buffer.idup;
 //        return buffer[0..index].idup;
     }
 
@@ -267,10 +267,10 @@ ubyte[] fromHex(in string hex) pure nothrow {
                                             result += e.size;
                                         }
                                         else static if (E is NATIVE_DOCUMENT_ARRAY) {
-                                            result += e.size;
+                                            result += uint.sizeof+e.size;
                                         }
                                         else static if (E is NATIVE_STRING_ARRAY) {
-                                            result += uint.sizeof + e.length;
+                                            result += uint.sizeof+e.length;
                                         }
                                     }
                                     return result;
@@ -301,7 +301,7 @@ ubyte[] fromHex(in string hex) pure nothrow {
             with(Type) {
             foreach(i, h; value.by!E) {
                 immutable key=i.to!string;
-                static if (E is NATIVE_HIBON_ARRAY) {
+                static if ( (E is NATIVE_HIBON_ARRAY) || (E is NATIVE_DOCUMENT_ARRAY)) {
                     enum ElementE = DOCUMENT;
                 }
                 else {
@@ -310,6 +310,9 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 Document.buildKey(buffer, ElementE, key, index);
                 static if (E is NATIVE_HIBON_ARRAY) {
                     h.append(buffer, index);
+                }
+                else static if (E is NATIVE_DOCUMENT_ARRAY) {
+                    buffer.array_write(h.data, index);
                 }
                 else {
                     assert(0, format("%s is not implemented yet", E));
@@ -689,6 +692,24 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
         { // Document array
             HiBON[] hibon_array;
+            alias TabelDocArray = Tuple!(
+                int, "a",
+                string, "b",
+                float, "c"
+                );
+            TabelDocArray tabel_doc_array;
+            tabel_doc_array.a=42;
+            tabel_doc_array.b="text";
+            tabel_doc_array.c=42.42;
+
+            foreach(i, t; tabel_doc_array) {
+                enum name=tabel_doc_array.fieldNames[i];
+                auto local_hibon=new HiBON;
+                local_hibon[name]=t;
+                hibon_array~=local_hibon;
+            }
+            /*
+
             {
                 auto a =new HiBON;
                 a["a"]=int(42);
@@ -706,7 +727,7 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 a["c"]=float(42.42);
                 hibon_array~=a;
             }
-
+            */
             auto hibon = new HiBON;
             hibon["int"]  = int(42);
             hibon["array"]= hibon_array;
@@ -723,6 +744,15 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 const doc_e =doc["array"];
                 assert(doc_e.type is Type.DOCUMENT);
                 const doc_array = doc_e.by!(Type.DOCUMENT);
+                foreach(i, t; tabel_doc_array) {
+                    enum name=tabel_doc_array.fieldNames[i];
+                    alias U=tabel_doc_array.Types[i];
+                    const doc_local=doc_array[i].by!(Type.DOCUMENT);
+                    const local_e=doc_local[name];
+                    assert(local_e.type is Value.asType!U);
+                    assert(local_e.get!U == t);
+                }
+/*
                 {
                     const doc_a = doc_array[0].by!(Type.DOCUMENT);
                     const a_e = doc_a["a"];
@@ -741,6 +771,42 @@ ubyte[] fromHex(in string hex) pure nothrow {
                     assert(c_e.type is Type.FLOAT32);
                     assert(c_e.get!float == float(42.42));
                 }
+*/
+            }
+
+            { // Test of Document[]
+                Document[] docs;
+                foreach(h; hibon_array) {
+                    docs~=Document(h.serialize);
+                }
+
+                auto hibon_doc_array= new HiBON;
+                hibon_doc_array["doc_array"]=docs;
+
+                writefln("hibon_doc_array.length=%d", hibon_doc_array.length);
+                assert(hibon_doc_array.length is 1);
+
+                writefln("hibon_doc_array.size=%d", hibon_doc_array.size);
+                immutable data_array=hibon_doc_array.serialize;
+                writefln("data_array.length=%d", data_array.length);
+                writefln("data_array=%s", data_array);
+
+
+                const doc_all=Document(data_array);
+                const doc_array=doc_all["doc_array"].by!(Type.DOCUMENT);
+
+                foreach(i, t; tabel_doc_array) {
+                    enum name=tabel_doc_array.fieldNames[i];
+                    alias U=tabel_doc_array.Types[i];
+                    alias E=Value.asType!U;
+                    const e=doc_array[i]; //.get!U;
+                    const doc_e=e.by!(Type.DOCUMENT);
+                    const sub_e=doc_e[name];
+                    writefln("e.type=%s %s", sub_e.type, E);
+                    assert(sub_e.type is E);
+                    assert(sub_e.by!E == t);
+                }
+
             }
 
         }
