@@ -165,9 +165,11 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
     immutable(ubyte[]) serialize() const pure {
         scope buffer = new ubyte[size];
+//        scope buffer = new ubyte[0x200];
         size_t index;
         append(buffer, index);
         return buffer.idup;
+//        return buffer[0..index].idup;
     }
 
     private void append(ref ubyte[] buffer, ref size_t index) const pure {
@@ -254,10 +256,10 @@ ubyte[] fromHex(in string hex) pure nothrow {
                                 else static if ( E is NATIVE_DOCUMENT ) {
                                     return Document.sizeKey(key)+value.by!(E).size+uint.sizeof;
                                 }
-                                else static if ( isNative(E) ) {
-                                    size_t result = uint.sizeof + Type.sizeof;
-                                    alias T = Value.TypeT!E;
-                                    alias U = ForeachType!(T);
+                                else static if ( isNativeArray(E) ) {
+                                    size_t result = Document.sizeKey(key)+uint.sizeof+Type.sizeof;
+                                    // alias T = Value.TypeT!E;
+                                    //alias U = ForeachType!(T);
                                     foreach(i, e; value.by!(E)[]) {
                                         immutable key=i.to!string;
                                         result += Document.sizeKey(key);
@@ -287,13 +289,34 @@ ubyte[] fromHex(in string hex) pure nothrow {
             }
         }
 
-        version(none)
-        protected void appendList(Type E)(ref ubyte[] buffer, ref size_t index) const if ( isList!E ) {
-            alias U=ForeachType!(Value.type!E);
-            foreach(h; value.get!E) {
-                const m= new const(Member)(h);
-                m.append(buffer, index);
+        protected void appendList(Type E)(ref ubyte[] buffer, ref size_t index)  const pure if (isNativeArray(E)) {
+//            alias U=ForeachType!(Value.TypeT!E);
+            immutable size_index = index;
+            buffer.binwrite(uint.init, &index);
+            scope(exit) {
+                buffer.binwrite(Type.NONE, &index);
+                immutable doc_size=cast(uint)(index - size_index - uint.sizeof);
+                buffer.binwrite(doc_size, size_index);
             }
+            with(Type) {
+            foreach(i, h; value.by!E) {
+                immutable key=i.to!string;
+                static if (E is NATIVE_HIBON_ARRAY) {
+                    enum ElementE = DOCUMENT;
+                }
+                else {
+                    enum ElementE = NONE;
+                }
+                Document.buildKey(buffer, ElementE, key, index);
+                static if (E is NATIVE_HIBON_ARRAY) {
+                    h.append(buffer, index);
+                }
+                else {
+                    assert(0, format("%s is not implemented yet", E));
+                }
+            }
+            }
+
         }
 
         void append(ref ubyte[] buffer, ref size_t index) const pure {
@@ -314,8 +337,12 @@ ubyte[] fromHex(in string hex) pure nothrow {
                                     const doc=value.by!(E);
                                     buffer.array_write(value.by!(E).data, index);
                                 }
+                                else static if (isNativeArray(E)) {
+                                    Document.buildKey(buffer, DOCUMENT, key, index);
+                                    appendList!E(buffer, index);
+                                }
                                 else {
-                                    assert(0, format("%s is not implemented yet", E));
+                                    goto default;
                                 }
                             }
                             else {
@@ -658,9 +685,71 @@ ubyte[] fromHex(in string hex) pure nothrow {
                 assert(sub_e.type is Type.INT32);
                 assert(sub_e.get!int is 42);
             }
+        }
+
+        { // Document array
+            HiBON[] hibon_array;
+            {
+                auto a =new HiBON;
+                a["a"]=int(42);
+                hibon_array~=a;
+            }
+
+            {
+                auto a =new HiBON;
+                a["b"]="text";
+                hibon_array~=a;
+            }
+
+            {
+                auto a =new HiBON;
+                a["c"]=float(42.42);
+                hibon_array~=a;
+            }
+
+            auto hibon = new HiBON;
+            hibon["int"]  = int(42);
+            hibon["array"]= hibon_array;
+
+            writefln("hibon.size=%d", hibon.size);
+            immutable data = hibon.serialize;
+
+            writefln("data=%s", data);
+            writefln("data.length=%s", data.length);
+            const doc = Document(data);
+            writefln("key=%s", doc.keys);
+
+            {
+                assert(doc["int"].get!int is 42);
+            }
+
+            {
+                const doc_e =doc["array"];
+                assert(doc_e.type is Type.DOCUMENT);
+                const doc_array = doc_e.by!(Type.DOCUMENT);
+                {
+                    const doc_a = doc_array[0].by!(Type.DOCUMENT);
+                    const a_e = doc_a["a"];
+                    assert(a_e.type is Type.INT32);
+                    assert(a_e.get!int is 42);
+                }
+                {
+                    const doc_b = doc_array[1].by!(Type.DOCUMENT);
+                    const b_e = doc_b["b"];
+                    assert(b_e.type is Type.STRING);
+                    assert(b_e.get!string == "text");
+                }
+                {
+                    const doc_c = doc_array[2].by!(Type.DOCUMENT);
+                    const c_e = doc_c["c"];
+                    assert(c_e.type is Type.FLOAT32);
+                    assert(c_e.get!float == float(42.42));
+                }
+            }
 
         }
     }
+
     version(none)
     void opIndexAssign(T, Index)(T x, const Index index) if (isIntegral!Index) {
         opIndexAssign(x, index.to!string);

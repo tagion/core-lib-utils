@@ -682,9 +682,9 @@ static assert(uint.sizeof == 4);
                                     //     return 0;
                                     // }
                                     // else {
-                                        immutable binary_array_pos = valuePos+uint.sizeof;
-                                        immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
-                                        return binary_array_pos + byte_size;
+                                    immutable binary_array_pos = valuePos+uint.sizeof;
+                                    immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
+                                    return binary_array_pos + byte_size;
                                     // }
                                 }
                                 else {
