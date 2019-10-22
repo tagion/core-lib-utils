@@ -11,8 +11,6 @@
  */
 module tagion.utils.HiBON;
 
-
-import std.stdio;
 //import std.datetime;   // Date, DateTime
 import std.container : RedBlackTree;
 import std.format;
@@ -816,14 +814,9 @@ ubyte[] fromHex(in string hex) pure nothrow {
             auto hibon=new HiBON;
             hibon["texts"]=texts;
 
-            writefln("%d", hibon.size);
-            writefln("%s", hibon.serialize);
-            writefln("%s", hibon.serialize.length);
-
             immutable data=hibon.serialize;
             const doc=Document(data);
             const doc_texts=doc["texts"].by!(Type.DOCUMENT);
-            writefln("doc_texts.length=%d", doc_texts.length);
 
             assert(doc_texts.length is texts.length);
             foreach(i, s; texts) {
