@@ -101,18 +101,18 @@ ubyte[] fromHex(in string hex) pure nothrow {
         Type type;
         Value value;
 
-        protected this() nothrow {
+        protected this() pure nothrow {
             value = uint.init;
         }
 
-        this(T)(T x, string key) if ( !is(T == const) ) {
+        this(T)(T x, string key) pure if ( !is(T == const) ) {
             this.value = x;
             this.type  = Value.asType!T;
             this.key  = key;
         }
 
         @trusted
-        this(T)(T x, string key) const if ( is(T == const) ) {
+        this(T)(T x, string key) const pure if ( is(T == const) ) {
             static if ( is(T == class) || is(T == struct) ) {
                 alias MutableT = Unqual!T;
                 this.value = cast(MutableT)x;
@@ -133,7 +133,7 @@ ubyte[] fromHex(in string hex) pure nothrow {
             return value.document;
         }
 
-        static Member search(string key) {
+        static Member search(string key) pure {
             auto result=new Member();
             result.key = key;
             return result;
@@ -147,6 +147,10 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
         auto by(Type type)() inout {
             return value.by!type;
+        }
+
+        static const(Member) opCast(string key) pure {
+            return Member.search(key);
         }
 
         @trusted
@@ -285,21 +289,30 @@ ubyte[] fromHex(in string hex) pure nothrow {
         return range.front;
     }
 
-    void append(T)(string key, T x) {
-        alias BaseT=TypedefType!T;
-        alias UnqualT=Unqual!BaseT;
-        HiBON elm=new HiBON;
-        scope(success) {
-            Member member={key : key, element : elm};
-            _member.insert(member);
-        }
-        static if ( is(UnqualT == bool) ) {
-            elm._type=Type.BOOLEAN;
-            elm.value.boolean=x;
-        }
-        else static if ( is(UnqualT == double) ) {
-            int x;
-        }
+    bool hasMember(in string key) const {
+        auto range=_members.equalRange(Member.search(key));
+        return !range.empty;
+    }
+
+    @trusted
+    void remove(string key) {
+        _members.removeKey(Member.search(key));
+    }
+
+    unittest { // remove
+        auto hibon=new HiBON;
+        hibon["a"] =1;
+        hibon["b"] =2;
+        hibon["c"] =3;
+        hibon["d"] =4;
+
+        assert(hibon.hasMember("b"));
+        hibon.remove("b");
+        assert(!hibon.hasMember("b"));
+    }
+
+    size_t length() const {
+        return _members.length;
     }
 
     unittest {
@@ -632,84 +645,4 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
     }
 
-    size_t length() const {
-        return _members.length;
-    }
-
-}
-
-
-
-// int[] doc2ints(Document doc) {
-//     int[] result;
-//     foreach(elm; doc.opSlice) {
-//         result~=elm.as!int;
-//     }
-//     return result;
-// }
-
-// double[] doc2doubles(Document doc) {
-//     double[] result;
-//     foreach(elm; doc.opSlice) {
-//         result~=elm.as!double;
-//     }
-//     return result;
-// }
-
-version(none)
-unittest { // HiBON with const member
-    alias GHiBON=HiBON!true;
-    auto hbson1=new GHiBON;
-    auto hbson2=new GHiBON;
-    hbson1["hugh"]="Some data";
-    hbson1["age"]=42;
-    hbson1["height"]=155.7;
-
-    hbson2["obj"]=hbson1;
-    immutable hbson1_data=hbson1.serialize;
-    immutable hbson2_data=hbson2.serialize;
-
-    auto doc1=Document(hbson1_data);
-    auto doc2=Document(hbson2_data);
-
-    assert(hbson1_data.length == doc1.data.length);
-    assert(hbson1_data == doc1.data);
-
-    assert(hbson2_data.length == doc2.data.length);
-    assert(hbson2_data == doc2.data);
-
-    void doc_hbson_const(GHiBON hbson, const(GHiBON) b) {
-
-        hbson["obj"]=b;
-    }
-
-    auto hbson2c=new GHiBON;
-    doc_hbson_const(hbson2c, hbson1);
-
-    immutable hbson2c_data=hbson2c.serialize;
-    auto doc2c=Document(hbson2c_data);
-    assert(hbson2c_data == doc2c.data);
-    assert(doc2c.data == doc2.data);
-
-}
-
-version(none)
-unittest { // Test of Native Document type
-    // The native document type is only used as an internal representation of the Document
-    auto hbson1=new HiBON;
-    auto hbson2=new HiBON;
-    auto doc_hbson=new HiBON;
-    doc_hbson["int"]=10;
-    doc_hbson["bool"]=true;
-    hbson1["obj"]=doc_hbson;
-
-    // Test of using native Documnet as a object member
-    auto doc=Document(doc_hbson.serialize);
-    hbson2["obj"]=doc;
-    auto data1=hbson1.serialize;
-    // writefln("%s:%d", data1, data1.length);
-    auto data2=hbson2.serialize;
-    // writefln("%s:%d", data2, data2.length);
-    assert(data1.length == data2.length);
-    assert(data1 == data2);
 }
