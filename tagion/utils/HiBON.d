@@ -711,13 +711,9 @@ ubyte[] fromHex(in string hex) pure nothrow {
             hibon["int"]  = int(42);
             hibon["array"]= hibon_array;
 
-            writefln("hibon.size=%d", hibon.size);
             immutable data = hibon.serialize;
 
-            writefln("data=%s", data);
-            writefln("data.length=%s", data.length);
             const doc = Document(data);
-            writefln("key=%s", doc.keys);
 
             {
                 assert(doc["int"].get!int is 42);
