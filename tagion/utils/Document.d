@@ -275,27 +275,24 @@ static assert(uint.sizeof == 4);
 
         writefln("data=%s", data);
 
-        auto R=doc.range!(immutable(ubyte)[][]);
-        foreach(a; R) {
-            writefln("range %s", a);
+        auto tabelR=doc.range!(immutable(ubyte)[][]);
+        foreach(t; tabel_range) {
+            assert(tabelR.front == t);
+            tabelR.popFront;
         }
+
         auto S=doc.range!(string[]);
-        writefln("Type %s", typeof(S.front).stringof);
-        writefln("empty %s", S.empty);
-        writefln("front %s", S.front);
 
-        foreach(s; S) {
-            writefln("range %s", s);
+        assert(!S.empty);
+        bool should_fail;
+        try {
+            auto s=S.front;
         }
-        // auto hibon=new HiBON;
+        catch (HiBONException e) {
+            should_fail=true;
+        }
 
-        // hibon[0]=buf1;
-        // hibon[1]=buf2;
-        // hibon[2]=buf3;
-
-        // const doc=Document(hibon.serialize);
-        // auto R=doc.
-
+        assert(should_fail);
     }
 
     @safe struct RangeT(T) {
