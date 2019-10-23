@@ -18,7 +18,7 @@ import tagion.utils.HiBONBase;
 static assert(uint.sizeof == 4);
 
 @safe struct Document {
-    protected alias Value=ValueT!(false, void, Document);
+    alias Value=ValueT!(false, void, Document);
     immutable(ubyte[]) data;
 
     @disable this();
@@ -259,17 +259,40 @@ static assert(uint.sizeof == 4);
         return RangeT!U(data);
     }
 
+    unittest {
+        alias TabelRange = Tuple!( immutable(ubyte)[],  immutable(ubyte)[], immutable(ubyte)[]);
+        TabelRange tabel_range;
+
+        tabel_range[0]=[1,2,4];
+        tabel_range[1]=[3,4,5,6];
+        tabel_range[2]=[8,4,2,1];
+
+        size_t index;
+        auto buffer=new ubyte[0x200];
+        index = make(buffer, tabel_range);
+        immutable data = buffer[0..index].idup;
+        const doc=Document(data);
+
+        writefln("data=%s", data);
+        // auto hibon=new HiBON;
+
+        // hibon[0]=buf1;
+        // hibon[1]=buf2;
+        // hibon[2]=buf3;
+
+        // const doc=Document(hibon.serialize);
+        // auto R=doc.
+
+    }
+
     @safe struct RangeT(T) {
         Range range;
         this(immutable(ubyte)[] data) {
             range = Range(data);
         }
 
-        @property {
-            bool empty() const {
-                return range.empty;
-            }
 
+        @property {
             void popFront() {
                 range.popFront;
             }
@@ -278,12 +301,20 @@ static assert(uint.sizeof == 4);
                 return range.front.get!T;
             }
 
-            string key() const {
-                return range.front.key;
+            uint index() const {
+                return range.front.index;
             }
 
-            uint  index() const {
-                return range.front.index;
+            const pure {
+                bool empty() nothrow {
+                    return range.empty;
+                }
+
+
+                string key() nothrow {
+                    return range.front.key;
+                }
+
             }
         }
     }

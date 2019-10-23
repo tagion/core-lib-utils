@@ -157,7 +157,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
 
         @trusted
         size_t size() const pure {
-            debug writefln("size() key=%s type=%s", key, type);
             with(Type) {
             TypeCase:
                 switch(type) {
@@ -234,7 +233,6 @@ ubyte[] fromHex(in string hex) pure nothrow {
         }
 
         void append(ref ubyte[] buffer, ref size_t index) const pure {
-            debug writefln("key=%s type=%s", key, type);
             with(Type) {
             TypeCase:
                 switch(type) {
@@ -287,10 +285,26 @@ ubyte[] fromHex(in string hex) pure nothrow {
         _members.insert(new_member);
     }
 
+    void opIndexAssign(T)(T x, const size_t index) {
+        const key=index.to!string;
+        static if(!is(size_t == uint) ) {
+            .check(index <= uint.max, format("Index out of range (index=%d)", index));
+        }
+        opIndexAssign(x, key);
+    }
+
     const(Member) opIndex(in string key) const {
         auto range=_members.equalRange(Member.search(key));
         .check(!range.empty, format("Member '%s' does not exist", key) );
         return range.front;
+    }
+
+    const(Member) opIndex(const size_t index) const {
+        const key=index.to!string;
+        static if(!is(size_t == uint) ) {
+            .check(index <= uint.max, format("Index out of range (index=%d)", index));
+        }
+        return opIndex(key);
     }
 
     bool hasMember(in string key) const {
