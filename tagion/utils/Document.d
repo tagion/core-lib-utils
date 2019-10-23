@@ -274,6 +274,19 @@ static assert(uint.sizeof == 4);
         const doc=Document(data);
 
         writefln("data=%s", data);
+
+        auto R=doc.range!(immutable(ubyte)[][]);
+        foreach(a; R) {
+            writefln("range %s", a);
+        }
+        auto S=doc.range!(string[]);
+        writefln("Type %s", typeof(S.front).stringof);
+        writefln("empty %s", S.empty);
+        writefln("front %s", S.front);
+
+        foreach(s; S) {
+            writefln("range %s", s);
+        }
         // auto hibon=new HiBON;
 
         // hibon[0]=buf1;
@@ -287,6 +300,8 @@ static assert(uint.sizeof == 4);
 
     @safe struct RangeT(T) {
         Range range;
+        enum EType=Value.asType!T;
+        static assert(EType !is Type.NONE, format("Range type %s not supported", T.stringof));
         this(immutable(ubyte)[] data) {
             range = Range(data);
         }
@@ -635,7 +650,7 @@ static assert(uint.sizeof == 4);
             }
 
             auto by(Type E)() {
-                .check(type is E, format("Type expected type is %s but the actual type is %s", E, type));
+                .check(type is E, format("Type expected is %s but the actual type is %s", E, type));
                 .check(E !is Type.NONE, format("Type is not supported %s the actual type is %s", E, type));
                 return value.by!E;
 
