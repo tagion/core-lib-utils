@@ -1,6 +1,9 @@
 module tagion.utils.JSONOutStream;
 
-import std.stdio : File;
+import std.stdio : File, stdout;
+
+import tagion.utils.JSONInStream : JSONType;
+import std.traits : ForeachType, hasMember;
 
 template isJSONElement(T) {
     static if (!is(typeof(T.type) : JSONType)) {
@@ -57,7 +60,7 @@ template JTypeT(JSONType jtype) {
 }
 
 void JSONOutStream(Range) (
-    Range range, ref File fout=stdout, immutable(bool) OBJ, immutable(string) indent="", immutable(string) EOL="\n") {
+    Range range, ref File fout=stdout, immutable(bool) OBJ=true, immutable(string) indent="", immutable(string) EOL="\n") if (isInputRange!Range) {
     pragma(msg, "Add JSONElement check");
     if (OBJ) {
         fout.writef("%s{%s", indent, EOL);
@@ -72,24 +75,36 @@ void JSONOutStream(Range) (
         }
     }
     bool first=true;
+    alias ElementT=ForeachType!Range;
     foreach(e; range) {
         if ( !first ) {
-            fout.writef(",%s", e.EOL);
+            fout.writef(",%s", range.EOL);
         }
         first=false;
         if (OBJ) {
             fout.writef("%s\"%s\" : ", indent, e.key);
         }
-        else if (e.EOL) {
+        else if (range.EOL) {
             fout.write(indent);
         }
+
         with(JSONType) {
             final switch(e.type) {
             case OBJECT:
-                JSONRange(e.range, fout, OBJECT_BRACKETS, indent~e.indent, e.EOL);
+                static if (hasMember!(ElementT, "range")) {
+                    JSONOutStream(e.range, fout, true, indent~range.indent, range.EOL);
+                }
+                else {
+                    assert(0, "Object expect an JSON Range");
+                }
                 break;
             case ARRAY:
-                JSONRange(e.range, fout, ARRAY_BRACKETS, indent~e.indent, e.EOL);
+                static if (hasMember!(ElementT, "range")) {
+                    JSONOutStream(e.range, fout, false, indent~range.indent, range.EOL);
+                }
+                else {
+                    assert(0, "Object expect an JSON Range");
+                }
                 break;
             case NULL:
                 fout.write("null");

@@ -239,7 +239,7 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
         }
     }
 
-    enum asType(T) = GetType!(T, __traits(allMembers, ValueT));
+    enum asType(T) = GetType!(Unqual!T, __traits(allMembers, ValueT));
     enum hasType(T) = asType!T !is Type.NONE;
 
     version(none)
