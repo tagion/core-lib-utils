@@ -846,4 +846,87 @@ static assert(uint.sizeof == 4);
             return data[0..s] == other.data[0..s];
         }
     }
+
+    /+
+    struct JSONRange {
+        private Range range;
+
+        this(immutable(ubyte)[] data) {
+            range=Range(data);
+        }
+
+        static struct JSONElement {
+            Element* elm;
+            string key;
+            JSONType jtype;
+            this(ref const(Element)* elm) {
+                this.elm=elm;
+            }
+
+            this(string key, JSONType jtype) {
+                this.elm=null;
+                this.key=key;
+                this.jtype=jtype;
+            }
+
+            @property const pure nothrow {
+                string key() {
+                    return (elm)?elm.key:key;
+                }
+
+                JSONType type() {
+                    return (elm)?jtype:JSONType.STRING;
+                }
+
+                T get(T)() {
+                    static if(is(T == string)) {
+                        check(jtype is JSONType.STRING, format("Expected JTYPE %s but got %s", JSONType.STRING, jtype));
+                    }
+                    else static if(is(T == double)) {
+                        check(jtype is JSONType.NUMBER, format("Expected JTYPE %s but got %s", JSONType.NUMBER, jtype));
+                    }
+                    else static if(is(T == bool)) {
+                        check(jtype is JSONType.BOOLEAN, format("Expected JTYPE %s but got %s", JSONType.BOOLEAN, jtype));
+                    }
+                    else {
+                        static assert(0, format("Type %s is not supported in by JSON", T.stringof));
+                    }
+                }
+
+            }
+        }
+
+        @property {
+            bool empty() const pure nothrow  {
+                return range.empty;
+            }
+
+            const(JSONElement) front() const {
+                const elm=range.front;
+                with(Type) {
+                    final switch(elm.type) {
+                    case NONE:
+                        check(0, "Unsupported type");
+                        break;
+                    case FLOAT32:
+
+                        break;
+
+                    }
+                }
+                return JSONElement(&(range.front));
+            }
+
+            void popFront() {
+                range.popFront;
+            }
+        }
+    }
+
+
+    }
+    void toJSON() const {
+
+    }
+    +/
 }
