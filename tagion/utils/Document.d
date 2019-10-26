@@ -10,6 +10,7 @@ import std.meta : AliasSeq, Filter;
 import std.traits : isBasicType, isSomeString, isIntegral, isNumeric, getUDAs, EnumMembers, Unqual;
 import std.conv : to, emplace;
 import std.algorithm.iteration : map;
+import std.algorithm.searching : count;
 
 import tagion.Types : decimal_t;
 import tagion.Base : isOneOf;
@@ -46,14 +47,8 @@ static assert(uint.sizeof == 4);
         }
     }
 
-    @trusted
     @property uint length() const {
-
-        uint counter;
-        foreach(e; this[]) {
-            counter++;
-        }
-        return counter;
+        return cast(uint)count(this[]);
     }
 
     alias ErrorCallback =void function(ref scope const(Element));
@@ -77,6 +72,7 @@ static assert(uint.sizeof == 4);
         return Element.ErrorCode.NONE;
     }
 
+    version(none)
     void toJSON(T, string INDENT="  ", string EOL="\n", string SPACE=" ")(T stream, string indent=null) {
         enum BETWEEN=","~EOL;
         bool first=true;
@@ -175,12 +171,36 @@ static assert(uint.sizeof == 4);
     }
 
     auto keys() const {
-        return map!"a.key"(Range(data));
+        return map!"a.key"(this[]);
     }
 
     // Throws an std.conv.ConvException if the keys can not be convert to an uint
     auto indices() const {
-        return map!"a.key.to!uint"(Range(data));
+        return map!"a.key.to!uint"(this[]);
+    }
+
+    bool isArray() const {
+        auto range=this[];
+        bool check_array_index(const uint previous_index) {
+            if (!range.empty) {
+                range.popFront;
+                uint current_index;
+                if (is_index(range.front.key, current_index)) {
+                    if (previous_index+1 is current_index) {
+                        return check_array_index(current_index);
+                    }
+                }
+                return false;
+            }
+            return true;
+        }
+        if (!range.empty) {
+            uint previous_index;
+            if (is_index(range.front.key, previous_index)) {
+                return check_array_index(previous_index);
+            }
+        }
+        return false;
     }
 
     bool hasElement(in string key) const {
@@ -617,13 +637,13 @@ static assert(uint.sizeof == 4);
                 TypeCase:
                 switch(type) {
                     static foreach(E; EnumMembers!Type) {
-                        static if (isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
+                        static if (.isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
                         case E:
                             static if (E is Type.DOCUMENT) {
                                 immutable byte_size = *cast(uint*)(data[valuePos..valuePos+uint.sizeof].ptr);
                                 return new Value(Document(data[valuePos..valuePos+uint.sizeof+byte_size]));
                             }
-                            else static if (isArray(E) || (E is Type.STRING)) {
+                            else static if (.isArray(E) || (E is Type.STRING)) {
                                 alias T = Value.TypeT!E;
                                 static if ( is(T: U[], U) ) {
                                     immutable birary_array_pos = valuePos+uint.sizeof;
@@ -686,6 +706,11 @@ static assert(uint.sizeof == 4);
                 .check(is_index(key, result), format("Key '%s' is not an index", key));
                 return result;
             }
+
+            bool isIndex() {
+                uint result;
+                return is_index(key, result);
+            }
         }
 
         @property const pure nothrow {
@@ -720,7 +745,7 @@ static assert(uint.sizeof == 4);
                         case E:
                             static if (isHiBONType(E)) {
                                 alias T = Value.TypeT!E;
-                                static if ( isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
+                                static if ( .isArray(E) || (E is STRING) || (E is DOCUMENT) ) {
                                     // static if (isNative(E)) {
                                     //     return 0;
                                     // }
@@ -791,12 +816,12 @@ static assert(uint.sizeof == 4);
                     if ( size < data.length ) {
                         return OVERFLOW;
                     }
-                    if ( isArray(type) ) {
+                    if ( .isArray(type) ) {
                         immutable binary_array_pos = valuePos+uint.sizeof;
                         immutable byte_size = *cast(uint*)(data[valuePos..binary_array_pos].ptr);
                         switch(type) {
                             static foreach(E; EnumMembers!Type) {
-                                static if ( isArray(E) && !isNative(E) ) {
+                                static if ( .isArray(E) && !isNative(E) ) {
                                 case E:
                                     alias T = Value.TypeT!E;
                                     static if ( is(T : U[], U) ) {
