@@ -1,6 +1,6 @@
 module tagion.utils.HiBONJSON;
 
-import std.stdio;
+//import std.stdio;
 
 import std.json;
 import std.conv : to;
@@ -15,7 +15,7 @@ import tagion.utils.Document : Document;
 // import tagion.utils.JSONInStream : JSONType;
 
 import tagion.TagionExceptions : Check;
-import tagion.utils.Miscellaneous : toHex=toHexString;
+import tagion.utils.Miscellaneous : toHex=toHexString, decode;
 
 /**
  * Exception type used by tagion.utils.BSON module
@@ -218,17 +218,16 @@ struct toJSONT(bool HASHSAFE) {
 HiBON toHiBON(scope const JSONValue json) {
     static const(T) get(T)(scope JSONValue jvalue) {
         alias UnqualT=Unqual!T;
-        writefln("Inside get=%s type=%s" ,jvalue, jvalue.type);
         static if (is(UnqualT==bool)) {
             return jvalue.boolean;
         }
         else static if(is(UnqualT==uint)) {
-            return jvalue.uinteger.to!uint;
+            return jvalue.integer.to!uint;
         }
         else static if(is(UnqualT==int)) {
             return jvalue.integer.to!int;
         }
-        else static if(is(UnqualT==long) || is(UnqualTT==ulong)) {
+        else static if(is(UnqualT==long) || is(UnqualT==ulong)) {
             return jvalue.str.to!UnqualT;
         }
         else static if(is(UnqualT==string)) {
@@ -266,10 +265,6 @@ HiBON toHiBON(scope const JSONValue json) {
         immutable label=jvalue.array[TYPE].str;
         .check((label in labelMap) !is null, "HiBON type name '%s' is not valid", label);
         immutable type=labelMap[label];
-        writefln("type=%s", type);
-        scope(failure) {
-            writefln("Faild at key %s jstype=%s %s", key, jvalue.type, jvalue);
-        }
 
         with(Type) {
             final switch(type) {
@@ -281,13 +276,18 @@ HiBON toHiBON(scope const JSONValue json) {
 
                         static if(E is DOCUMENT) {
                             return false;
-//                            .check(0, format("Type abel '%s' should not be used explicit", label));
-//                            pragma(msg, "Obj ", typeof(value),  " ", ReturnType!(Obj));
-//                            sub_result[key]=Obj(value);
                         }
                         else {
                             static if(E is UTC) {
                                 assert(0, format("Type %s is supported yet", E));
+                            }
+                            else static if(E is BINARY) {
+                                import std.uni : toLower;
+                                scope str=value.str;
+                                enum HEX_PREFIX="0x";
+                                .check(str[0..HEX_PREFIX.length].toLower == HEX_PREFIX,
+                                    format("Hex prefix %s expected for type %s", HEX_PREFIX, E));
+                                sub_result[key]=decode(str[HEX_PREFIX.length..$]);
                             }
                             else static if (isArray(E)) {
                                 .check(value.type is JSONType.array, format("JSON array expected for %s for member %s", E, key));
@@ -301,7 +301,6 @@ HiBON toHiBON(scope const JSONValue json) {
 
                             }
                             else {
-                                writefln("Before get =%s", value);
                                 sub_result[key]=get!T(value);
                             }
                             return true;
@@ -362,55 +361,79 @@ HiBON toHiBON(scope const JSONValue json) {
 
 unittest {
     import tagion.utils.HiBON : HiBON;
+    import std.typecons : Tuple;
+    alias Tabel = Tuple!(
+        float,  Type.FLOAT32.stringof,
+        double, Type.FLOAT64.stringof,
+        bool,   Type.BOOLEAN.stringof,
+        int,    Type.INT32.stringof,
+        long,   Type.INT64.stringof,
+        uint,   Type.UINT32.stringof,
+        ulong,  Type.UINT64.stringof,
+//                utc_t,  Type.UTC.stringof
+        );
+
+    Tabel test_tabel;
+    test_tabel.FLOAT32 = 1.23;
+    test_tabel.FLOAT64 = 1.23e200;
+    test_tabel.INT32   = -42;
+    test_tabel.INT64   = -0x0123_3456_789A_BCDF;
+    test_tabel.UINT32   = 42;
+    test_tabel.UINT64   = 0x0123_3456_789A_BCDF;
+    test_tabel.BOOLEAN  = true;
+
+    alias TabelArray = Tuple!(
+        immutable(ubyte)[],  Type.BINARY.stringof,
+        immutable(float)[],  Type.FLOAT32_ARRAY.stringof,
+        immutable(double)[], Type.FLOAT64_ARRAY.stringof,
+        immutable(int)[],    Type.INT32_ARRAY.stringof,
+        immutable(long)[],   Type.INT64_ARRAY.stringof,
+        immutable(uint)[],   Type.UINT32_ARRAY.stringof,
+        immutable(ulong)[],  Type.UINT64_ARRAY.stringof,
+        immutable(bool)[],   Type.BOOLEAN_ARRAY.stringof,
+        string,              Type.STRING.stringof
+
+        );
+    TabelArray test_tabel_array;
+    test_tabel_array.BINARY        = [1, 2, 3];
+    test_tabel_array.FLOAT32_ARRAY = [-1.23, 3, 20e30];
+    test_tabel_array.FLOAT64_ARRAY = [10.3e200, -1e-201];
+    test_tabel_array.INT32_ARRAY   = [-11, -22, 33, 44];
+    test_tabel_array.INT64_ARRAY   = [0x17, 0xffff_aaaa, -1, 42];
+    test_tabel_array.UINT32_ARRAY  = [11, 22, 33, 44];
+    test_tabel_array.UINT64_ARRAY  = [0x17, 0xffff_aaaa, 1, 42];
+    test_tabel_array.BOOLEAN_ARRAY = [true, false];
+    test_tabel_array.STRING        = "Text";
 
     auto hibon=new HiBON;
-    hibon["x"]=int(-42);
-    hibon["txt"]="some text";
+    {
+        foreach(i, t; test_tabel) {
+            enum name=test_tabel.fieldNames[i];
+            hibon[name]=t;
+        }
+        auto sub_hibon = new HiBON;
+        hibon[sub_hibon.stringof]=sub_hibon;
+        foreach(i, t; test_tabel_array) {
+            enum name=test_tabel_array.fieldNames[i];
+            sub_hibon[name]=t;
+        }
+    }
 
-    auto sub_hibon = new HiBON;
-    sub_hibon["bool"]=true;
-    sub_hibon["txt2"]="some other text";
-    immutable arr=[10, 20, 30];
-    immutable arr2=cast(long[])[-10, 20e6, 30];
-    immutable arr3=cast(float[])[-10.2, 20.3e6, 0.0333];
-    sub_hibon["arr"]=arr;
-    sub_hibon["arr2"]=arr2;
-    sub_hibon["arr3"]=arr3;
+    //
+    // Checks
+    // HiBON -> Document -> JSON -> HiBON -> Document
+    //
+    const doc=Document(hibon.serialize);
 
-    hibon["obj"]=sub_hibon;
-    immutable data=hibon.serialize;
-    const doc=Document(data);
-
-//    auto range=JSONRange(doc);
-    // auto a=new JSONElement("x", JSONType.NULL);
-    // alias ElementT=ForeachType!(JSONElement);
-    // version(none) {
-//    writefln("Before toJSON");
-    auto json=doc.toJSON(true);//new JSONObjectElement("", doc);//, "", "^^");
-    // pragma(msg, "range ", typeof(range));
-    // alias ElementT=ForeachType!(JSONElement);
-    // foreach(e; range) {
-    //     writefln("e=%s", e);
-    //     foreach(s; e) {
-    //         writefln("\ts=%s", s);
-    //     }
-    // }
-//    pragma(msg, "isInputRange ", isInputRange!(JSONRangeE!(Type.DOCUMENT)));
-    // auto base=JSONOutStream(range);
-
-    //   base(stdout);
-//    auto fout=File("/tmp/dump.json", "w");
-//    JSONOutStream(range)(stdout);
-//    }
-
-    //writefln("%s", typeof(json));
-
-    writefln("%s", json.toPrettyString);
+    auto json=doc.toJSON(true);
+    //  writefln("%s", json.toPrettyString);
     string str=json.toString;
     auto parse=str.parseJSON;
     auto h=parse.toHiBON;
 
     const parse_doc=Document(h.serialize);
-    writefln("After %s", parse_doc.toJSON(true).toPrettyString);
-//    pragma(msg, typeof(parse.toHiBON));
+//    writefln("After %s", parse_doc.toJSON(true).toPrettyString);
+
+    assert(doc == parse_doc);
+    assert(doc.toJSON(true).toString == parse_doc.toJSON(true).toString);
 }
