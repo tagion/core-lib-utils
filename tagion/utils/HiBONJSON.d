@@ -352,7 +352,6 @@ HiBON toHiBON(scope const JSONValue json) {
                     break;
                 }
             }
-            writefln("%s: <%s>", key,  jvalue.type);
         }
         return result;
     }
