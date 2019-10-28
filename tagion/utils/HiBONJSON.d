@@ -293,7 +293,6 @@ HiBON toHiBON(scope const JSONValue json) {
                                 .check(value.type is JSONType.array, format("JSON array expected for %s for member %s", E, key));
                                 alias U=Unqual!(ForeachType!T);
                                 scope array=new U[value.array.length];
-                                pragma(msg, "value=", typeof(value));
                                 foreach(size_t i, ref e; value) {
                                     array[i]=get!U(e);
                                 }

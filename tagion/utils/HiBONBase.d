@@ -282,7 +282,6 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
 
     @trusted
     void opAssign(T)(T x) if (isOneOf!(T, typeof(this.tupleof))) {
-        pragma(msg, "opAssign ", T);
         alias UnqualT = Unqual!T;
         static foreach(m; __traits(allMembers, ValueT) ) {
             static if ( is(typeof(__traits(getMember, this, m)) == T ) ){
@@ -303,7 +302,6 @@ union ValueT(bool NATIVE=false, HiBON,  Document) {
     alias TypeT(Type aType) = typeof(by!aType());
 
     uint size(Type E)() const pure nothrow {
-        pragma(msg, "Size ", E, " : ", isHiBONType(E));
         static if (isHiBONType(E)) {
             alias T = TypeT!E;
             static if ( isBasicValueType!T || (E is Type.UTC)  ) {
