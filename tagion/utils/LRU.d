@@ -102,11 +102,6 @@ class LRU(K,V)  {
             // Remove the oldest element
             removeOldest;
         }
-//         static if ( is (K:const(ubyte)[]) ) {
-//             import std.stdio;
-//             import tagion.crypto.Hash : toHexString;
-// //            writefln("Add[%s]=%s evict=%s", key.toHexString, value.id, evict);
-//         }
         return evict;
     }
 
@@ -496,6 +491,8 @@ unittest { // immutable struct
     }
     alias TestLRU=LRU!(int,E);
     void onEvicted(const(int) i, TestLRU.Element* e) @safe {
+        import std.stdio;
+        writefln("Stop not used");
         assert(0, "Not used");
     }
 
