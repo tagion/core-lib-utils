@@ -112,3 +112,23 @@ do {
     const _b=cast(const(ulong[]))b;
     return cast(Buffer)gene_xor(_a, _b);
 }
+
+@safe
+void xor(ref ubyte[] result, const(ubyte[]) a, const(ubyte[]) b) pure
+    in {
+        assert(a.length == b.length);
+        assert(a.length % ulong.sizeof == 0);
+    }
+do {
+    import tagion.utils.Gene : gene_xor;
+    const _a=cast(const(ulong[]))a;
+    const _b=cast(const(ulong[]))b;
+    auto _result=cast(ulong[])result;
+    gene_xor(_result, _a, _b);
+}
+
+@safe
+Buffer xor(Range)(Range range) pure {
+    import std.algorithm.iteration: fold;
+    return range.fold!((a,b) => xor(a,b));
+}
