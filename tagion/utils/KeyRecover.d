@@ -234,15 +234,17 @@ unittest {
     recover.createKey(selected_questions, answers, 3);
 
 
+
     auto R=new ubyte[net.hashSize];
 
-    {
+    { // All the ansers are correct
         const result = recover.findSecret(R, selected_questions, answers);
         writefln("R=%s", R.toHexString);
+        assert(R.length == net.hashSize);
         assert(result); // Password found
     }
 
-    {
+    { // 3 out of 5 answers are correct. This is a valid answer to generate the secret key
         string[] good_answers=[
             "MobiDick",
             "MOTHER TERESA",
@@ -252,12 +254,12 @@ unittest {
         ];
         auto goodR=new ubyte[net.hashSize];
         const result = recover.findSecret(goodR, selected_questions, good_answers);
-        writefln("goodR=%s", goodR.toHexString);
-        writefln("result=%s", result);
-
+        assert(R.length == net.hashSize);
+        assert(result); // Password found
+        assert(R == goodR);
     }
 
-    {
+    { // 2 out of 5 answers are correct. This is NOT a valid answer to generate the secret key
         string[] bad_answers=[
             "mobidick",
             "Monalisa",
@@ -267,11 +269,8 @@ unittest {
         ];
         auto badR=new ubyte[net.hashSize];
         const result = recover.findSecret(badR, selected_questions, bad_answers);
-        writefln("badR=%s", badR.toHexString);
-        writefln("result=%s", result);
+        assert(!result); // Password not found
+        assert(R != badR);
 
     }
-//    auto result=recover.
-    writefln("strip_down=%s", strip_down(answers[1]));
-
 }
