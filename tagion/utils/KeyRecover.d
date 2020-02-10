@@ -5,6 +5,10 @@ import tagion.utils.Miscellaneous : xor;
 import tagion.Base : Buffer;
 import tagion.Message;
 import tagion.gossip.GossipNet : scramble;
+import tagion.hibon.HiBON : HiBON;
+import tagion.hibon.Document : Document;
+import tagion.hibon.HiBONRecord;
+import tagion.Base : basename;
 
 import std.exception : assumeUnique;
 import std.string : representation;
@@ -35,16 +39,26 @@ alias check=Check!KeyRecorverException;
 struct KeyRecover {
     enum MAX_QUESTION = 10;
     enum MAX_SEEDS = 64;
-    protected {
+    struct RecoverSeed {
         Buffer[] Y; /// Recorvery seed
         Buffer S;   /// Check value S=H(H(R))
-        const HashNet net;
-        uint confidence;
+        @Label("$N") uint confidence;
+        mixin HiBONRecord;
+    }
+    const HashNet net;
+    protected RecoverSeed seed;
+
+    this(HashNet net) {
+        this.net=net;
     }
 
-    this(HashNet net, Buffer S=null) {
-        this.S=S;
+    this(HashNet net, Document doc) {
         this.net=net;
+        seed=RecoverSeed(doc);
+    }
+
+    HiBON toHiBON() const {
+        return seed.toHiBON;
     }
 
     /++
@@ -129,13 +143,13 @@ struct KeyRecover {
      +/
     void quizSeed(scope ref const(ubyte[]) R, Buffer[] A, const uint confidence) {
         scope(success) {
-            this.confidence=confidence;
-            S = checkHash(R);
+            seed.confidence=confidence;
+            seed.S = checkHash(R);
         }
         scope(failure) {
-            Y=null;
-            S=null;
-            this.confidence=0;
+            seed.Y=null;
+            seed.S=null;
+            seed.confidence=0;
         }
         .check(A.length > 1, message("Number of questions must be more than one"));
         .check(confidence <= A.length, message("Number qustions must be lower than or equal to the confidence level (M=%d and N=%d)",
@@ -146,11 +160,11 @@ struct KeyRecover {
         const seeds = numberOfSeeds(number_of_questions, confidence);
         .check(seeds <= MAX_SEEDS, message("Number quiz-seeds is %d which exceed that max value of %d",
                 seeds, MAX_SEEDS));
-        Y=new Buffer[seeds];
+        seed.Y=new Buffer[seeds];
         uint count;
         bool calculate_this_seeds(scope const(uint[]) indices) {
             scope list_of_selected_answers_and_the_secret=indexed(A, indices);
-            Y[count] = xor(R, xor(list_of_selected_answers_and_the_secret));
+            seed.Y[count] = xor(R, xor(list_of_selected_answers_and_the_secret));
             count++;
             return false;
         }
@@ -163,25 +177,25 @@ struct KeyRecover {
 
     bool findSecret(scope ref ubyte[] R, Buffer[] A) const {
         .check(A.length > 1, message("Number of questions must be more than one"));
-        .check(confidence <= A.length, message("Number qustions must be lower than or equal to the confidence level (M=%d and N=%d)",
-                A.length, confidence));
+        .check(seed.confidence <= A.length, message("Number qustions must be lower than or equal to the confidence level (M=%d and N=%d)",
+                A.length, seed.confidence));
         const number_of_questions=cast(uint)A.length;
-        const seeds = numberOfSeeds(number_of_questions, confidence);
-        .check(Y.length == seeds, message("Number of answers does not match the number of quiz seeds"));
+        const seeds = numberOfSeeds(number_of_questions, seed.confidence);
+        .check(seed.Y.length == seeds, message("Number of answers does not match the number of quiz seeds"));
         bool result;
         bool search_for_the_secret(scope const(uint[]) indices) {
             scope list_of_selected_answers_and_the_secret=indexed(A, indices);
             const guess = xor(list_of_selected_answers_and_the_secret);
-            foreach(y; Y) {
+            foreach(y; seed.Y) {
                 xor(R, y, guess);
-                if (S == checkHash(R)) {
+                if (seed.S == checkHash(R)) {
                     result=true;
                     return true;
                 }
             }
             return false;
         }
-        iterateSeeds(number_of_questions, confidence, &search_for_the_secret);
+        iterateSeeds(number_of_questions, seed.confidence, &search_for_the_secret);
         return result;
     }
 }
