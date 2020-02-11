@@ -177,7 +177,8 @@ struct KeyRecover {
 
     bool findSecret(scope ref ubyte[] R, Buffer[] A) const {
         .check(A.length > 1, message("Number of questions must be more than one"));
-        .check(seed.confidence <= A.length, message("Number qustions must be lower than or equal to the confidence level (M=%d and N=%d)",
+        .check(seed.confidence <= A.length,
+            message("Number qustions must be lower than or equal to the confidence level (M=%d and N=%d)",
                 A.length, seed.confidence));
         const number_of_questions=cast(uint)A.length;
         const seeds = numberOfSeeds(number_of_questions, seed.confidence);
@@ -213,10 +214,10 @@ do {
         .array);
 }
 
-static shared string[] standart_questions;
+static shared string[] standard_questions;
 
 shared static this() {
-    standart_questions=[
+    standard_questions=[
         "What is your favorite book?",
         "What is the name of the road you grew up on?",
         "What is your mother’s maiden name?",
@@ -233,7 +234,7 @@ shared static this() {
 unittest {
     import tagion.gossip.GossipNet : StdHashNet;
     import std.array : join;
-    auto selected_questions=indexed(standart_questions, [0,2,3,7,8]).array.idup;
+    auto selected_questions=indexed(standard_questions, [0,2,3,7,8]).array.idup;
     pragma(msg, typeof(selected_questions));
     writefln("%s", selected_questions.join("\n"));
     string[] answers=[
