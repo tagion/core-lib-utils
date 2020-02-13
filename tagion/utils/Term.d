@@ -152,24 +152,12 @@ struct KeyStroke {
           );
 
      KeyCode getKey(ref int ch) {
-
-        import std.stdio;
-        enum StaticComp(KeyStrain a, KeyStrain b) = a.branch < b.branch;
-//        alias strainComp = (a,b) => a.branch < b.branch;
-        alias sorted_strain = staticSort!(StaticComp, strain);
-        pragma(msg, sorted_strain);
-//        pragma(msg, sorted_strain1);
-        // pragma(msg, _strain1[1]);
-        //KeyCode result;
-        KeyCode select(uint index=0, uint pos=0)(ref int ch) {
-
+          enum StaticComp(KeyStrain a, KeyStrain b) = a.branch < b.branch;
+          alias sorted_strain = staticSort!(StaticComp, strain);
+          KeyCode select(uint index=0, uint pos=0)(ref int ch) {
              static if (index < sorted_strain.length) {
-                  pragma(msg, __FUNCTION__);
-                  writefln("ch=%d %s %s", ch, __FUNCTION__, sorted_strain[index]);
                   static if (pos < sorted_strain[index].branch.length) {
-                       writefln("\tcheck %s", sorted_strain[index].branch[pos]);
                        if (ch == sorted_strain[index].branch[pos])  {
-                            writeln("FOUND!");
                             static if (pos+1 is sorted_strain[index].branch.length){
                                  return sorted_strain[index].code;
                             }
@@ -183,13 +171,9 @@ struct KeyStroke {
                        }
                        else {
                             return KeyCode.NONE;
-                            //ch=get;
-
                        }
                   }
-                // else {
                   return select!(index+1, pos)(ch);
-                  // }
              }
              return KeyCode.NONE;
         }
