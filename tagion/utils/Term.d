@@ -1,6 +1,13 @@
 module tagion.utils.Term;
 
 import std.format;
+private import core.stdc.stdio;
+private import core.sys.linux.termios;
+//import std.algorithm.sorting : sort;
+import std.exception : assumeUnique;
+import std.meta : AliasSeq, staticSort;
+
+//import std.algorithm : sort;
 
 enum {
     BLACK   = Color.Black.code,
@@ -43,7 +50,7 @@ string code(
     immutable bool background=false,
     immutable bool bright=false) {
     if (c is Color.Reset) {
-        return "\u001b[%s%";
+        return "\u001b[0m";
     }
     else {
         immutable background_color=(background)?"4":"3";
@@ -61,8 +68,8 @@ enum Cursor : string {
     NextLine = "E",  /// Moves cursor to beginning of line n lines down
     PrevLine = "F",  /// Moves cursor to beginning of line n lines down
     SetColumn = "G", /// Moves cursor to column n
-    ClearScreen = "J", // clears the screen
-    ClearLine = "K"     // clears the current line
+    ClearScreen = "J", /// clears the screen
+    ClearLine = "K"     /// clears the current line
 }
 
 string code(immutable Cursor c, immutable uint n=1) {
@@ -89,3 +96,113 @@ string setCursor(immutable uint row, immutable uint column) {
 
 enum saveCursorPos   ="\u001b[s"; /// Saves the current cursor position
 enum restoreCursorPos="\u001b[u"; /// Restores the cursor to the last saved position
+
+
+extern(C) void cfmakeraw(termios *termios_p);
+
+
+
+struct KeyStroke {
+
+    termios  ostate;                 /* saved tty state */
+    termios  nstate;                 /* values for editor mode */
+
+    int get() {
+        // Open stdin in raw mode
+        // Adjust output channel
+        tcgetattr(1, &ostate);  // save old state
+        tcgetattr(1, &nstate);  // get base of new state
+        cfmakeraw(&nstate);
+        tcsetattr(1, TCSADRAIN, &nstate);  // set mode
+        scope(exit) {
+            tcsetattr(1, TCSADRAIN, &ostate);  // return to original mode
+        }
+        return fgetc(stdin);
+    }
+
+    enum KeyCode {
+        NONE,
+        UP,
+        DOWN,
+        LEFT,
+        RIGHT,
+        HOME,
+        END,
+        PAGEUP,
+        PAGEDOWN
+    }
+
+    struct KeyStrain {
+        KeyCode code;
+        int[] branch;
+        int opComp(const KeyStrain b) const {
+            return branch < b.branch;
+        }
+    }
+
+     alias strain = AliasSeq!(
+          KeyStrain(KeyCode.UP, [27,91,65]),
+          KeyStrain(KeyCode.DOWN, [27,91,66]),
+          KeyStrain(KeyCode.RIGHT, [27,91,67]),
+          KeyStrain(KeyCode.LEFT, [27,91,68]),
+          KeyStrain(KeyCode.HOME, [27,91,49,59,50,72]),
+          KeyStrain(KeyCode.END, [27,91,49,59,50,70]),
+          KeyStrain(KeyCode.PAGEDOWN, [27,91,54,126]),
+          KeyStrain(KeyCode.PAGEUP, [27,91,53,126]),
+          );
+
+     KeyCode getKey(ref int ch) {
+
+        import std.stdio;
+        enum StaticComp(KeyStrain a, KeyStrain b) = a.branch < b.branch;
+//        alias strainComp = (a,b) => a.branch < b.branch;
+        alias sorted_strain = staticSort!(StaticComp, strain);
+        pragma(msg, sorted_strain);
+//        pragma(msg, sorted_strain1);
+        // pragma(msg, _strain1[1]);
+        //KeyCode result;
+        KeyCode select(uint index=0, uint pos=0)(ref int ch) {
+
+             static if (index < sorted_strain.length) {
+                  pragma(msg, __FUNCTION__);
+                  writefln("ch=%d %s %s", ch, __FUNCTION__, sorted_strain[index]);
+                  static if (pos < sorted_strain[index].branch.length) {
+                       writefln("\tcheck %s", sorted_strain[index].branch[pos]);
+                       if (ch == sorted_strain[index].branch[pos])  {
+                            writeln("FOUND!");
+                            static if (pos+1 is sorted_strain[index].branch.length){
+                                 return sorted_strain[index].code;
+                            }
+                            else {
+                                 ch=get;
+                                 return select!(index, pos+1)(ch);
+                            }
+                       }
+                       else if (ch > sorted_strain[index].branch[pos])  {
+                            return select!(index+1, pos)(ch);
+                       }
+                       else {
+                            return KeyCode.NONE;
+                            //ch=get;
+
+                       }
+                  }
+                // else {
+                  return select!(index+1, pos)(ch);
+                  // }
+             }
+             return KeyCode.NONE;
+        }
+        ch=get;
+        return select(ch);
+    }
+
+
+    //enum strain = test;
+
+    // char opCall(ref KeyCode code) {
+    //     do {
+
+    //     }
+    // }
+}
