@@ -30,6 +30,12 @@ enum {
     BACKGOUND_RESET   = Color.Reset.code(true),
 
     RESET   = Color.Reset.code,
+    CLEARSCREEN = Cursor.ClearScreen.code(2),
+    CLEARDOWN   = Cursor.ClearScreen.code(0),
+    CLEARUP     = Cursor.ClearScreen.code(1),
+    CLEARLINE   = Cursor.ClearLine.code(2),
+    CLEAREOL    = Cursor.ClearLine.code(0),
+    HOME        = "\u001b[f",
 }
 
 enum Color {
@@ -60,22 +66,22 @@ string code(
     assert(0);
 }
 
-enum Cursor : string {
-    Up = "A",   /// Moves cursor up by n
-    Down = "B", /// Moves cursor down by n
-    Right ="C", /// Moves cursor right by n
-    Left = "D", /// Moves cursor left by n
-    NextLine = "E",  /// Moves cursor to beginning of line n lines down
-    PrevLine = "F",  /// Moves cursor to beginning of line n lines down
-    SetColumn = "G", /// Moves cursor to column n
-    ClearScreen = "J", /// clears the screen
-    ClearLine = "K"     /// clears the current line
+enum Cursor : char {
+    Up = 'A',   /// Moves cursor up by n
+    Down = 'B', /// Moves cursor down by n
+    Right ='C', /// Moves cursor right by n
+    Left = 'D', /// Moves cursor left by n
+    NextLine = 'E',  /// Moves cursor to beginning of line n lines down
+    PrevLine = 'F',  /// Moves cursor to beginning of line n lines down
+    SetColumn = 'G', /// Moves cursor to column n
+    ClearScreen = 'J', /// clears the screen
+    ClearLine = 'K'     /// clears the current line
 }
+
 
 string code(immutable Cursor c, immutable uint n=1) {
-    return format("\u001b[%d", n, c);
+     return format("\u001b[%d%s", n, char(c));
 }
-
 
 enum Mode {
     None = 0,       /// All attributes off
@@ -129,7 +135,8 @@ struct KeyStroke {
         HOME,
         END,
         PAGEUP,
-        PAGEDOWN
+        PAGEDOWN,
+        ENTER
     }
 
     struct KeyStrain {
@@ -149,6 +156,7 @@ struct KeyStroke {
           KeyStrain(KeyCode.END, [27,91,49,59,50,70]),
           KeyStrain(KeyCode.PAGEDOWN, [27,91,54,126]),
           KeyStrain(KeyCode.PAGEUP, [27,91,53,126]),
+          KeyStrain(KeyCode.ENTER, [13]),
           );
 
      KeyCode getKey(ref int ch) {
