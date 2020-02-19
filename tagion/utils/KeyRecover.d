@@ -42,7 +42,7 @@ struct KeyRecover {
     struct RecoverSeed {
         Buffer[] Y; /// Recorvery seed
         Buffer S;   /// Check value S=H(H(R))
-        @Label("$N") uint confidence;
+        @Label("N") uint confidence;
         mixin HiBONRecord;
     }
     const HashNet net;
