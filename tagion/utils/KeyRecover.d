@@ -19,7 +19,7 @@ import std.array : array;
 
 import tagion.TagionExceptions : Check, TagionException;
 
-    import std.stdio;
+import std.stdio;
 import tagion.utils.Miscellaneous : toHexString;
 
 /++
