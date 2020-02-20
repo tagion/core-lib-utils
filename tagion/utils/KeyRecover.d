@@ -19,7 +19,7 @@ import std.array : array;
 
 import tagion.TagionExceptions : Check, TagionException;
 
-import std.stdio;
+//import std.stdio;
 import tagion.utils.Miscellaneous : toHexString;
 
 /++
@@ -130,7 +130,6 @@ struct KeyRecover {
     void createKey(Buffer[] A, const uint confidence) {
         scope R=new ubyte[net.hashSize];
         scramble(R);
-        writefln("Generated R=%s", R.toHexString);
         scope(exit) {
             scramble(R);
         }
