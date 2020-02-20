@@ -90,7 +90,6 @@ struct KeyRecover {
     }
 
     static unittest {
-        writefln("numberOfSeeds(10, 5)=%d", numberOfSeeds(10, 5));
         assert(numberOfSeeds(10, 5) is 26);
     }
 
@@ -235,8 +234,8 @@ unittest {
     import tagion.gossip.GossipNet : StdHashNet;
     import std.array : join;
     auto selected_questions=indexed(standard_questions, [0,2,3,7,8]).array.idup;
-    pragma(msg, typeof(selected_questions));
-    writefln("%s", selected_questions.join("\n"));
+    //pragma(msg, typeof(selected_questions));
+    //writefln("%s", selected_questions.join("\n"));
     string[] answers=[
         "mobidick",
         "Mother Teresa!",
@@ -254,7 +253,7 @@ unittest {
 
     { // All the ansers are correct
         const result = recover.findSecret(R, selected_questions, answers);
-        writefln("R=%s", R.toHexString);
+        //writefln("R=%s", R.toHexString);
         assert(R.length == net.hashSize);
         assert(result); // Password found
     }
