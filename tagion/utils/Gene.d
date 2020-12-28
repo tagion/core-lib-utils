@@ -51,3 +51,16 @@ do {
         r=a[i]^b[i];
     }
 }
+
+@nogc @safe
+uint gene_count(scope const(ulong[]) a, scope const(ulong[]) b) pure nothrow
+in {
+     assert(a.length == b.length);
+}
+do {
+    uint result;
+    foreach(i, r; a) {
+        result+=gene_count(r^b[i]);
+    }
+    return result;
+}
