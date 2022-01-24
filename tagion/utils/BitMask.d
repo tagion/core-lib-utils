@@ -46,8 +46,20 @@ struct BitMask {
         range.each!((n) => this[n] = true);
     }
 
-    BitMask dup() const pure nothrow {
+    BitMask dup() const nothrow @trusted {
         BitMask result;
+        import std.exception;
+        debug {
+            assumeWontThrow({
+                    import core.stdc.stdio;
+                    auto duppi = mask.dup;
+                    printf("duppi=%p\n", &mask[0]);
+                    fflush(stdout);
+                });
+        }
+        debug {
+            const x=mask.dup;
+        }
         result.mask = mask.dup;
         return result;
     }
@@ -145,7 +157,12 @@ struct BitMask {
     }
     do {
         if (i >= mask.bitsize) {
-            mask.length = i.wordindex + 1;
+            if (mask is null) {
+                mask = new size_t[i.wordindex + 1];
+            }
+            else {
+                mask.length = i.wordindex + 1;
+            }
         }
         if (b) {
             mask[i.wordindex] |= size_t(1) << i.word_bitindex;
@@ -205,7 +222,7 @@ struct BitMask {
         return result;
     }
 
-    BitMask opBinary(string op)(const size_t index) const pure nothrow
+    BitMask opBinary(string op)(const size_t index) const nothrow
     if ((op == "-" || op == "+")) {
         BitMask result = dup;
         result[index] = (op == "+");
