@@ -46,20 +46,8 @@ struct BitMask {
         range.each!((n) => this[n] = true);
     }
 
-    BitMask dup() const nothrow @trusted {
+    BitMask dup() const pure nothrow {
         BitMask result;
-        import std.exception;
-        debug {
-            assumeWontThrow({
-                    import core.stdc.stdio;
-                    auto duppi = mask.dup;
-                    printf("duppi=%p\n", &mask[0]);
-                    fflush(stdout);
-                });
-        }
-        debug {
-            const x=mask.dup;
-        }
         result.mask = mask.dup;
         return result;
     }
@@ -77,6 +65,7 @@ struct BitMask {
     void toString(scope void delegate(scope const(char)[]) @trusted sink,
             const FormatSpec!char fmt) const {
         enum separator = '_';
+        import std.stdio;
 
         @nogc @safe struct BitRange {
             size_t index;
@@ -119,6 +108,7 @@ struct BitMask {
         case 's':
             auto bit_range = BitRange(this, fmt.width);
             scope char[] str;
+            //auto max_size=mask.length*(8*size_t.sizeof+((fmt.precision is )?0:(size_t.sizeof/fmt.precision+1)));
             auto max_size = bit_range.width + (bit_range.width) / fmt.precision + 1;
             str.length = max_size;
             size_t index;
@@ -157,12 +147,7 @@ struct BitMask {
     }
     do {
         if (i >= mask.bitsize) {
-            if (mask is null) {
-                mask = new size_t[i.wordindex + 1];
-            }
-            else {
-                mask.length = i.wordindex + 1;
-            }
+            mask.length = i.wordindex + 1;
         }
         if (b) {
             mask[i.wordindex] |= size_t(1) << i.word_bitindex;
@@ -215,14 +200,14 @@ struct BitMask {
             auto rest = (mask.length > rhs.mask.length) ? mask : rhs.mask;
             static if (op == "|" || op == "^") {
                 enum code = format(q{result.mask[min_length..$] %s= rest[min_length..$];}, op);
-                //pragma(msg, code);
+                pragma(msg, code);
                 mixin(code);
             }
         }
         return result;
     }
 
-    BitMask opBinary(string op)(const size_t index) const nothrow
+    BitMask opBinary(string op)(const size_t index) const pure nothrow
     if ((op == "-" || op == "+")) {
         BitMask result = dup;
         result[index] = (op == "+");
@@ -364,6 +349,7 @@ struct BitMask {
         import std.algorithm: equal;
         import std.algorithm.sorting: merge, sort;
         import std.algorithm.iteration: uniq, fold;
+        import std.stdio;
 
         { // Bit assign
             BitMask a;
@@ -597,6 +583,7 @@ struct BitMask {
             { // Empty Or=
                 BitMask y;
                 y |= a;
+                writefln("%.16s", y);
                 assert(y == a);
                 assert(a.count is y.count);
             }
