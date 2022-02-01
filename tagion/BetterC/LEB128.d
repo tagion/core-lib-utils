@@ -2,7 +2,6 @@
 
 module lib-utils.tagion.BetterC.LEB128;
 
-extern(C):
 @nogc:
 
 import traits=std.traits : isSigned, isUnsigned, isIntegral;

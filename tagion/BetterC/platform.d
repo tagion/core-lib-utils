@@ -6,7 +6,6 @@ module tagion.utilsBetterC.platform;
 public {
 version(WebAssembly) {
     pragma(msg, "WebAssembler Memory");
-extern(C):
     @nogc:
     void* calloc(size_t nmemb, size_t size);
     void* realloc(void* ptr, size_t size);
